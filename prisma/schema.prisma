@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum DayStatus {
+  PENDING
+  COMPLETED
+  SKIPPED
+  MISSED
+}
+
+model UserSettings {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userName          String
+  userEmail         String
+  partnerEmail      String? // Optional accountability partner CC'd on skip/missed alerts
+  targetCareerRole  String  // e.g., "Full-Stack Software Engineer"
+  timezone          String  @default("Asia/Kolkata")
+  currentStreak     Int     @default(0)
+  longestStreak     Int     @default(0)
+  lastCompletedDate String? // Normalized "YYYY-MM-DD" in Asia/Kolkata
+}
+
+model DailyLog {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  date        String     @unique // Normalized "YYYY-MM-DD" in Asia/Kolkata
+  status      DayStatus  @default(PENDING)
+  skipReason  String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  todos       TodoItem[]
+}
+
+model TodoItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  dailyLogId  String   @db.ObjectId
+  dailyLog    DailyLog @relation(fields: [dailyLogId], references: [id], onDelete: Cascade)
+  title       String
+  isCoreGoal  Boolean  @default(false) // Highlights the #1 mandatory daily deliverable
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
