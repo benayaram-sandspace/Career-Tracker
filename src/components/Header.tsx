@@ -1,75 +1,124 @@
 "use client";
 
 import React from "react";
-import { Sparkles, Settings, Sun, Moon, Lock, Unlock } from "lucide-react";
-import { formatFullDate } from "@/lib/dateUtils";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Settings,
+  Lock,
+  Compass,
+} from "lucide-react";
+import { formatHeaderDate } from "@/lib/dateUtils";
 
 interface HeaderProps {
   userName: string;
   targetRole: string;
+  selectedDate: string;
   todayIST: string;
-  isDark: boolean;
-  onToggleTheme: () => void;
+  onSelectDate: (date: string) => void;
+  onPrevDate: () => void;
+  onNextDate: () => void;
+  onOpenRoadmap: () => void;
   onOpenSettings: () => void;
   isPinProtected: boolean;
   onLockApp?: () => void;
 }
 
 export function Header({
-  userName,
   targetRole,
+  selectedDate,
   todayIST,
-  isDark,
-  onToggleTheme,
+  onSelectDate,
+  onPrevDate,
+  onNextDate,
+  onOpenRoadmap,
   onOpenSettings,
   isPinProtected,
   onLockApp,
 }: HeaderProps) {
+  const isToday = selectedDate === todayIST;
+
   return (
-    <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-      <div>
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            <Sparkles className="w-3.5 h-3.5" />
-            Target: {targetRole}
+    <header className="w-full bg-white border-b border-hairline py-3 px-4 sm:px-8 sticky top-0 z-30 shadow-xs">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        {/* Left: Breadcrumb */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-ink-muted font-medium">Career Shift</span>
+          <span className="text-hairline">/</span>
+          <span className="text-ink-primary font-semibold flex items-center gap-1.5">
+            <Compass className="w-3.5 h-3.5 text-ink-primary" />
+            {targetRole}
           </span>
-          <span className="text-xs text-slate-400 font-mono">
-            IST (UTC+5:30)
+          <span className="hidden md:inline-flex items-center ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-subtle text-ink-secondary border border-hairline">
+            30-Day Sprint
           </span>
         </div>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-          <span>{userName}&apos;s Career Shift</span>
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-          {formatFullDate(todayIST)}
-        </p>
-      </div>
 
-      <div className="flex items-center gap-2 self-end sm:self-center">
-        {isPinProtected && onLockApp && (
+        {/* Right: Date Switcher & Actions */}
+        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
+          {/* Day Navigation */}
+          <div className="flex items-center bg-subtle border border-hairline rounded-lg p-0.5 text-xs">
+            <button
+              onClick={onPrevDate}
+              title="Previous Day"
+              className="p-1.5 hover:bg-white rounded text-ink-secondary hover:text-ink-primary transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+
+            <span className="px-2.5 font-medium text-ink-primary font-mono tabular-nums text-xs">
+              {formatHeaderDate(selectedDate)}
+            </span>
+
+            <button
+              onClick={onNextDate}
+              title="Next Day"
+              className="p-1.5 hover:bg-white rounded text-ink-secondary hover:text-ink-primary transition-colors"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {!isToday && (
+            <button
+              onClick={() => onSelectDate(todayIST)}
+              className="text-xs px-2.5 py-1.5 rounded-lg border border-hairline hover:bg-subtle text-ink-secondary font-medium transition-colors"
+            >
+              Jump to Today
+            </button>
+          )}
+
+          {/* 30-Day Roadmap button */}
           <button
-            onClick={onLockApp}
-            title="Lock Dashboard (PIN Gate)"
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors border border-slate-800"
+            onClick={onOpenRoadmap}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-hairline hover:bg-subtle text-ink-primary text-xs font-semibold transition-colors shadow-2xs"
           >
-            <Lock className="w-4 h-4" />
+            <Calendar className="w-3.5 h-3.5 text-ink-secondary" />
+            <span className="hidden sm:inline">30-Day Roadmap</span>
+            <span className="sm:hidden">Roadmap</span>
           </button>
-        )}
-        <button
-          onClick={onToggleTheme}
-          title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors border border-slate-800"
-        >
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
-        <button
-          onClick={onOpenSettings}
-          title="Accountability Settings"
-          className="p-2 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-slate-800/60 transition-colors border border-slate-800 flex items-center gap-1.5 text-xs font-medium"
-        >
-          <Settings className="w-4 h-4" />
-          <span className="hidden sm:inline">Settings</span>
-        </button>
+
+          {/* Settings button */}
+          <button
+            onClick={onOpenSettings}
+            title="Accountability Settings"
+            className="p-1.5 rounded-lg border border-hairline hover:bg-subtle text-ink-secondary hover:text-ink-primary transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+
+          {/* PIN Lock */}
+          {isPinProtected && onLockApp && (
+            <button
+              onClick={onLockApp}
+              title="Lock Dashboard"
+              className="p-1.5 rounded-lg border border-hairline hover:bg-subtle text-ink-secondary hover:text-ink-primary transition-colors"
+            >
+              <Lock className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

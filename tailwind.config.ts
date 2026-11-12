@@ -10,21 +10,21 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
-        surface: {
-          light: "#F8FAFC",
-          dark: "#0F172A",
-          cardDark: "#1E293B",
-          cardLight: "#FFFFFF",
-          borderDark: "#334155",
-          borderLight: "#E2E8F0",
+        canvas: "#FAFAFA",
+        surface: "#FFFFFF",
+        subtle: "#F4F4F5",
+        hairline: "#E4E4E7",
+        obsidian: "#09090B",
+        ink: {
+          primary: "#09090B",
+          secondary: "#3F3F46",
+          muted: "#71717A",
         },
         brand: {
-          indigo: "#4F46E5",
           emerald: "#10B981",
-          amber: "#F59E0B",
-          rose: "#F43F5E",
+          amber: "#D97706",
+          rose: "#E11D48",
+          zinc: "#E4E4E7",
         },
       },
       fontFamily: {

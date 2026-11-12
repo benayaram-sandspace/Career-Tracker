@@ -15,20 +15,22 @@ enum DayStatus {
 }
 
 model UserSettings {
-  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
   userName          String
   userEmail         String
-  partnerEmail      String? // Optional accountability partner CC'd on skip/missed alerts
-  targetCareerRole  String  // e.g., "Full-Stack Software Engineer"
-  timezone          String  @default("Asia/Kolkata")
-  currentStreak     Int     @default(0)
-  longestStreak     Int     @default(0)
-  lastCompletedDate String? // Normalized "YYYY-MM-DD" in Asia/Kolkata
+  partnerEmail      String?  // Optional accountability partner CC'd on skip/missed alerts
+  targetCareerRole  String   // e.g., "Full-Stack Software Engineer"
+  timezone          String   @default("Asia/Kolkata")
+  planStartDate     String?  // "YYYY-MM-DD" start date of the 30-day sprint
+  currentStreak     Int      @default(0)
+  longestStreak     Int      @default(0)
+  lastCompletedDate String?  // Normalized "YYYY-MM-DD" in Asia/Kolkata
 }
 
 model DailyLog {
   id          String     @id @default(auto()) @map("_id") @db.ObjectId
   date        String     @unique // Normalized "YYYY-MM-DD" in Asia/Kolkata
+  dayNumber   Int?       // Optional 1..30 index within the 30-day roadmap
   status      DayStatus  @default(PENDING)
   skipReason  String?
   startedAt   DateTime?
@@ -41,7 +43,8 @@ model TodoItem {
   dailyLogId  String   @db.ObjectId
   dailyLog    DailyLog @relation(fields: [dailyLogId], references: [id], onDelete: Cascade)
   title       String
-  isCoreGoal  Boolean  @default(false) // Highlights the #1 mandatory daily deliverable
+  isCoreGoal  Boolean  @default(false) // Pins the #1 mandatory daily deliverable
   isCompleted Boolean  @default(false)
+  order       Int      @default(0)
   createdAt   DateTime @default(now())
 }

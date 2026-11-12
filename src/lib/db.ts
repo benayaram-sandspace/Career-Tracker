@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { prisma } from "./prisma";
-import { getTodayIST, getYesterdayIST } from "./dateUtils";
+import { getTodayIST, getYesterdayIST, getRoadmapDates } from "./dateUtils";
 
 export type DayStatus = "PENDING" | "COMPLETED" | "SKIPPED" | "MISSED";
 
@@ -12,6 +12,7 @@ export interface UserSettingsType {
   partnerEmail: string | null;
   targetCareerRole: string;
   timezone: string;
+  planStartDate: string | null;
   currentStreak: number;
   longestStreak: number;
   lastCompletedDate: string | null;
@@ -23,12 +24,14 @@ export interface TodoItemType {
   title: string;
   isCoreGoal: boolean;
   isCompleted: boolean;
+  order: number;
   createdAt: Date;
 }
 
 export interface DailyLogType {
   id: string;
   date: string;
+  dayNumber: number | null;
   status: DayStatus;
   skipReason: string | null;
   startedAt: Date | null;
@@ -44,6 +47,7 @@ interface LocalStore {
 }
 
 function getInitialStore(): LocalStore {
+  const today = getTodayIST("Asia/Kolkata");
   return {
     userSettings: {
       id: "default-settings",
@@ -52,6 +56,7 @@ function getInitialStore(): LocalStore {
       partnerEmail: null,
       targetCareerRole: "Full-Stack Software Engineer",
       timezone: "Asia/Kolkata",
+      planStartDate: today,
       currentStreak: 0,
       longestStreak: 0,
       lastCompletedDate: null,
@@ -71,7 +76,6 @@ function readLocalStore(): LocalStore {
     }
     const data = fs.readFileSync(LOCAL_DATA_FILE, "utf-8");
     const parsed = JSON.parse(data);
-    // Revive dates
     if (parsed.dailyLogs) {
       for (const date in parsed.dailyLogs) {
         const log = parsed.dailyLogs[date];
@@ -80,6 +84,7 @@ function readLocalStore(): LocalStore {
         if (log.todos) {
           for (const todo of log.todos) {
             if (todo.createdAt) todo.createdAt = new Date(todo.createdAt);
+            if (todo.order === undefined) todo.order = 0;
           }
         }
       }
@@ -111,6 +116,7 @@ function isPrismaConfigured(): boolean {
 // ----------------- Public Data Access Functions -----------------
 
 export async function getUserSettings(): Promise<UserSettingsType> {
+  const today = getTodayIST("Asia/Kolkata");
   if (isPrismaConfigured()) {
     try {
       let settings = await prisma.userSettings.findFirst();
@@ -121,6 +127,7 @@ export async function getUserSettings(): Promise<UserSettingsType> {
             userEmail: "user@example.com",
             targetCareerRole: "Full-Stack Software Engineer",
             timezone: "Asia/Kolkata",
+            planStartDate: today,
             currentStreak: 0,
             longestStreak: 0,
           },
@@ -133,6 +140,10 @@ export async function getUserSettings(): Promise<UserSettingsType> {
   }
 
   const store = readLocalStore();
+  if (!store.userSettings.planStartDate) {
+    store.userSettings.planStartDate = today;
+    writeLocalStore(store);
+  }
   return store.userSettings;
 }
 
@@ -161,20 +172,27 @@ export async function updateUserSettings(
   return store.userSettings;
 }
 
-export async function upsertDailyLog(date: string): Promise<DailyLogType> {
+export async function upsertDailyLog(date: string, dayNumber?: number): Promise<DailyLogType> {
   if (isPrismaConfigured()) {
     try {
       let log = await prisma.dailyLog.findUnique({
         where: { date },
-        include: { todos: { orderBy: { createdAt: "asc" } } },
+        include: { todos: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
       });
       if (!log) {
         log = await prisma.dailyLog.create({
           data: {
             date,
+            dayNumber: dayNumber ?? null,
             status: "PENDING",
           },
           include: { todos: true },
+        });
+      } else if (dayNumber !== undefined && log.dayNumber !== dayNumber) {
+        log = await prisma.dailyLog.update({
+          where: { id: log.id },
+          data: { dayNumber },
+          include: { todos: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
         });
       }
       return log as DailyLogType;
@@ -188,12 +206,16 @@ export async function upsertDailyLog(date: string): Promise<DailyLogType> {
     store.dailyLogs[date] = {
       id: `local-log-${date}`,
       date,
+      dayNumber: dayNumber ?? null,
       status: "PENDING",
       skipReason: null,
       startedAt: null,
       completedAt: null,
       todos: [],
     };
+    writeLocalStore(store);
+  } else if (dayNumber !== undefined) {
+    store.dailyLogs[date].dayNumber = dayNumber;
     writeLocalStore(store);
   }
   return store.dailyLogs[date];
@@ -204,7 +226,7 @@ export async function getDailyLog(date: string): Promise<DailyLogType | null> {
     try {
       const log = await prisma.dailyLog.findUnique({
         where: { date },
-        include: { todos: { orderBy: { createdAt: "asc" } } },
+        include: { todos: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
       });
       return log as DailyLogType | null;
     } catch (e) {
@@ -218,10 +240,31 @@ export async function getDailyLog(date: string): Promise<DailyLogType | null> {
 
 export async function get30DaysLogs(
   dates: string[]
-): Promise<Record<string, { status: DayStatus; skipReason?: string | null; durationMinutes?: number }>> {
+): Promise<
+  Record<
+    string,
+    {
+      dayNumber?: number | null;
+      status: DayStatus;
+      skipReason?: string | null;
+      durationMinutes?: number;
+      coreGoal?: string;
+      totalTasks?: number;
+      completedTasks?: number;
+    }
+  >
+> {
   const result: Record<
     string,
-    { status: DayStatus; skipReason?: string | null; durationMinutes?: number }
+    {
+      dayNumber?: number | null;
+      status: DayStatus;
+      skipReason?: string | null;
+      durationMinutes?: number;
+      coreGoal?: string;
+      totalTasks?: number;
+      completedTasks?: number;
+    }
   > = {};
 
   if (isPrismaConfigured()) {
@@ -230,6 +273,7 @@ export async function get30DaysLogs(
         where: {
           date: { in: dates },
         },
+        include: { todos: true },
       });
       for (const log of logs) {
         let durationMinutes: number | undefined;
@@ -241,10 +285,15 @@ export async function get30DaysLogs(
             )
           );
         }
+        const core = log.todos.find((t) => t.isCoreGoal)?.title;
         result[log.date] = {
+          dayNumber: log.dayNumber,
           status: log.status as DayStatus,
           skipReason: log.skipReason,
           durationMinutes,
+          coreGoal: core,
+          totalTasks: log.todos.length,
+          completedTasks: log.todos.filter((t) => t.isCompleted).length,
         };
       }
       return result;
@@ -266,10 +315,15 @@ export async function get30DaysLogs(
           )
         );
       }
+      const core = log.todos?.find((t) => t.isCoreGoal)?.title;
       result[date] = {
+        dayNumber: log.dayNumber,
         status: log.status,
         skipReason: log.skipReason,
         durationMinutes,
+        coreGoal: core,
+        totalTasks: log.todos?.length || 0,
+        completedTasks: log.todos?.filter((t) => t.isCompleted).length || 0,
       };
     }
   }
@@ -279,14 +333,14 @@ export async function get30DaysLogs(
 export async function createTodoItem(
   date: string,
   title: string,
-  isCoreGoal: boolean
+  isCoreGoal: boolean,
+  order: number = 0
 ): Promise<TodoItemType> {
   const log = await upsertDailyLog(date);
 
   if (isPrismaConfigured()) {
     try {
       if (isCoreGoal) {
-        // Demote any existing core goal for this daily log
         await prisma.todoItem.updateMany({
           where: { dailyLogId: log.id, isCoreGoal: true },
           data: { isCoreGoal: false },
@@ -299,6 +353,7 @@ export async function createTodoItem(
           title,
           isCoreGoal,
           isCompleted: false,
+          order,
         },
       });
       return item as TodoItemType;
@@ -321,6 +376,7 @@ export async function createTodoItem(
     title,
     isCoreGoal,
     isCompleted: false,
+    order,
     createdAt: new Date(),
   };
 
@@ -331,7 +387,7 @@ export async function createTodoItem(
 
 export async function updateTodoItem(
   id: string,
-  data: { isCompleted?: boolean; title?: string; isCoreGoal?: boolean }
+  data: { isCompleted?: boolean; title?: string; isCoreGoal?: boolean; order?: number }
 ): Promise<TodoItemType | null> {
   if (isPrismaConfigured()) {
     try {
@@ -367,6 +423,7 @@ export async function updateTodoItem(
       if (data.isCompleted !== undefined) todo.isCompleted = data.isCompleted;
       if (data.title !== undefined) todo.title = data.title;
       if (data.isCoreGoal !== undefined) todo.isCoreGoal = data.isCoreGoal;
+      if (data.order !== undefined) todo.order = data.order;
       writeLocalStore(store);
       return todo;
     }
@@ -397,6 +454,140 @@ export async function deleteTodoItem(id: string): Promise<boolean> {
   return false;
 }
 
+export interface BatchDayInput {
+  date: string;
+  dayNumber: number;
+  coreGoal: string;
+  subTasks?: string[];
+}
+
+export async function saveRoadmapBatch(
+  startDate: string,
+  days: BatchDayInput[]
+): Promise<{ success: boolean; count: number }> {
+  // 1. Update UserSettings with planStartDate
+  await updateUserSettings({ planStartDate: startDate });
+
+  if (isPrismaConfigured()) {
+    try {
+      for (const day of days) {
+        let log = await prisma.dailyLog.findUnique({
+          where: { date: day.date },
+        });
+
+        if (!log) {
+          log = await prisma.dailyLog.create({
+            data: {
+              date: day.date,
+              dayNumber: day.dayNumber,
+              status: "PENDING",
+            },
+          });
+        } else {
+          log = await prisma.dailyLog.update({
+            where: { id: log.id },
+            data: { dayNumber: day.dayNumber },
+          });
+        }
+
+        // Delete existing uncompleted todos or replace
+        await prisma.todoItem.deleteMany({
+          where: { dailyLogId: log.id },
+        });
+
+        // Add core goal
+        if (day.coreGoal && day.coreGoal.trim()) {
+          await prisma.todoItem.create({
+            data: {
+              dailyLogId: log.id,
+              title: day.coreGoal.trim(),
+              isCoreGoal: true,
+              isCompleted: false,
+              order: 0,
+            },
+          });
+        }
+
+        // Add sub tasks
+        if (day.subTasks && day.subTasks.length > 0) {
+          let orderIdx = 1;
+          for (const sub of day.subTasks) {
+            if (sub && sub.trim()) {
+              await prisma.todoItem.create({
+                data: {
+                  dailyLogId: log.id,
+                  title: sub.trim(),
+                  isCoreGoal: false,
+                  isCompleted: false,
+                  order: orderIdx++,
+                },
+              });
+            }
+          }
+        }
+      }
+      return { success: true, count: days.length };
+    } catch (e) {
+      console.warn("Prisma saveRoadmapBatch error, falling back to local storage:", e);
+    }
+  }
+
+  const store = readLocalStore();
+  store.userSettings.planStartDate = startDate;
+
+  for (const day of days) {
+    if (!store.dailyLogs[day.date]) {
+      store.dailyLogs[day.date] = {
+        id: `local-log-${day.date}`,
+        date: day.date,
+        dayNumber: day.dayNumber,
+        status: "PENDING",
+        skipReason: null,
+        startedAt: null,
+        completedAt: null,
+        todos: [],
+      };
+    } else {
+      store.dailyLogs[day.date].dayNumber = day.dayNumber;
+      store.dailyLogs[day.date].todos = [];
+    }
+
+    const log = store.dailyLogs[day.date];
+
+    if (day.coreGoal && day.coreGoal.trim()) {
+      log.todos.push({
+        id: `local-todo-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        dailyLogId: log.id,
+        title: day.coreGoal.trim(),
+        isCoreGoal: true,
+        isCompleted: false,
+        order: 0,
+        createdAt: new Date(),
+      });
+    }
+
+    if (day.subTasks && day.subTasks.length > 0) {
+      let orderIdx = 1;
+      for (const sub of day.subTasks) {
+        if (sub && sub.trim()) {
+          log.todos.push({
+            id: `local-todo-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            dailyLogId: log.id,
+            title: sub.trim(),
+            isCoreGoal: false,
+            isCompleted: false,
+            order: orderIdx++,
+            createdAt: new Date(),
+          });
+        }
+      }
+    }
+  }
+
+  writeLocalStore(store);
+  return { success: true, count: days.length };
+}
+
 export async function startDailyPractice(date: string): Promise<DailyLogType> {
   const now = new Date();
   if (isPrismaConfigured()) {
@@ -407,7 +598,7 @@ export async function startDailyPractice(date: string): Promise<DailyLogType> {
         data: {
           startedAt: log.startedAt ? log.startedAt : now,
         },
-        include: { todos: true },
+        include: { todos: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
       });
       return updated as DailyLogType;
     } catch (e) {
@@ -441,20 +632,17 @@ export async function completeDailyPractice(
   } else if (settings.lastCompletedDate === todayIST) {
     newStreak = settings.currentStreak; // Same-day idempotency
   } else {
-    // Gap or first-day reset
     newStreak = 1;
   }
 
   const newLongestStreak = Math.max(settings.longestStreak, newStreak);
 
-  // Update Settings
   const updatedSettings = await updateUserSettings({
     currentStreak: newStreak,
     longestStreak: newLongestStreak,
     lastCompletedDate: todayIST,
   });
 
-  // Update Daily Log
   if (isPrismaConfigured()) {
     try {
       const log = await upsertDailyLog(date);
@@ -465,7 +653,7 @@ export async function completeDailyPractice(
           completedAt: now,
           startedAt: log.startedAt ? log.startedAt : now,
         },
-        include: { todos: true },
+        include: { todos: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
       });
       return { log: updatedLog as DailyLogType, userSettings: updatedSettings };
     } catch (e) {
@@ -488,7 +676,6 @@ export async function skipDailyPractice(
   date: string,
   skipReason: string
 ): Promise<{ log: DailyLogType; userSettings: UserSettingsType }> {
-  // Skipping resets streak to 0
   const updatedSettings = await updateUserSettings({
     currentStreak: 0,
   });
@@ -502,7 +689,7 @@ export async function skipDailyPractice(
           status: "SKIPPED",
           skipReason,
         },
-        include: { todos: true },
+        include: { todos: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
       });
       return { log: updatedLog as DailyLogType, userSettings: updatedSettings };
     } catch (e) {
@@ -523,7 +710,6 @@ export async function skipDailyPractice(
 export async function missDailyPractice(
   date: string
 ): Promise<{ log: DailyLogType; userSettings: UserSettingsType }> {
-  // Missed day resets streak to 0
   const updatedSettings = await updateUserSettings({
     currentStreak: 0,
   });
@@ -536,7 +722,7 @@ export async function missDailyPractice(
         data: {
           status: "MISSED",
         },
-        include: { todos: true },
+        include: { todos: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
       });
       return { log: updatedLog as DailyLogType, userSettings: updatedSettings };
     } catch (e) {

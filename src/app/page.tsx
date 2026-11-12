@@ -2,24 +2,35 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/Header";
-import { StreakCard } from "@/components/StreakCard";
-import { PracticeCard } from "@/components/PracticeCard";
-import { TodoList } from "@/components/TodoList";
-import { ConsistencyStrip } from "@/components/ConsistencyStrip";
+import { ExecutionCanvas } from "@/components/ExecutionCanvas";
+import { TelemetryRail } from "@/components/TelemetryRail";
+import { RoadmapPlannerDrawer } from "@/components/RoadmapPlannerDrawer";
 import { SkipModal } from "@/components/SkipModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { PinModal } from "@/components/PinModal";
 import { UserSettingsType, DailyLogType, DayStatus } from "@/lib/db";
+import { addDaysToDate, getDayNumber } from "@/lib/dateUtils";
 import { Loader2, AlertCircle } from "lucide-react";
 
 interface DashboardData {
   userSettings: UserSettingsType;
+  todayIST: string;
+  selectedDate: string;
+  selectedLog: DailyLogType;
   todayLog: DailyLogType;
+  roadmapDates: string[];
   history30Days: Record<
     string,
-    { status: DayStatus; skipReason?: string | null; durationMinutes?: number }
+    {
+      dayNumber?: number | null;
+      status: DayStatus;
+      skipReason?: string | null;
+      durationMinutes?: number;
+      coreGoal?: string;
+      totalTasks?: number;
+      completedTasks?: number;
+    }
   >;
-  todayIST: string;
   pinRequired: boolean;
   authenticated: boolean;
 }
@@ -29,23 +40,34 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modals & theme
+  // Active viewing date
+  const [currentDate, setCurrentDate] = useState<string>("");
+
+  // Modals & Drawers
+  const [isRoadmapOpen, setIsRoadmapOpen] = useState(false);
   const [isSkipModalOpen, setIsSkipModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isDark, setIsDark] = useState(true);
   const [isStartingPractice, setIsStartingPractice] = useState(false);
   const [isCompletingPractice, setIsCompletingPractice] = useState(false);
 
-  // Load dashboard data
-  const loadDashboard = useCallback(async () => {
+  // Load dashboard data for a given date
+  const loadDashboard = useCallback(async (targetDate?: string) => {
     try {
       setError(null);
-      const res = await fetch("/api/dashboard", { cache: "no-store" });
+      const url = targetDate
+        ? `/api/dashboard?date=${targetDate}`
+        : "/api/dashboard";
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) {
         throw new Error("Failed to load dashboard data");
       }
       const json: DashboardData = await res.json();
       setData(json);
+      if (!targetDate) {
+        setCurrentDate(json.todayIST);
+      } else {
+        setCurrentDate(targetDate);
+      }
     } catch (err: any) {
       console.error(err);
       setError(err.message || "An unexpected error occurred loading data");
@@ -58,19 +80,20 @@ export default function DashboardPage() {
     loadDashboard();
   }, [loadDashboard]);
 
-  // Theme toggle
-  const toggleTheme = () => {
-    setIsDark((prev) => {
-      const next = !prev;
-      if (next) {
-        document.documentElement.classList.add("dark");
-        document.documentElement.classList.remove("light");
-      } else {
-        document.documentElement.classList.remove("dark");
-        document.documentElement.classList.add("light");
-      }
-      return next;
-    });
+  // Date switching handlers
+  const handleSelectDate = (date: string) => {
+    setCurrentDate(date);
+    loadDashboard(date);
+  };
+
+  const handlePrevDate = () => {
+    const prev = addDaysToDate(currentDate || data?.todayIST || "", -1);
+    handleSelectDate(prev);
+  };
+
+  const handleNextDate = () => {
+    const next = addDaysToDate(currentDate || data?.todayIST || "", 1);
+    handleSelectDate(next);
   };
 
   // Lock Dashboard (logout PIN)
@@ -89,16 +112,8 @@ export default function DashboardPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to start practice");
 
-      // Optimistically update todayLog
-      if (data) {
-        setData({
-          ...data,
-          todayLog: {
-            ...data.todayLog,
-            startedAt: json.log.startedAt,
-          },
-        });
-      }
+      // Reload dashboard state
+      await loadDashboard(currentDate);
     } catch (err: any) {
       alert(err.message || "Could not start practice");
     } finally {
@@ -113,8 +128,7 @@ export default function DashboardPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to complete practice");
 
-      // Refresh to get full updated streak & logs
-      await loadDashboard();
+      await loadDashboard(currentDate);
     } catch (err: any) {
       alert(err.message || "Could not complete practice");
     } finally {
@@ -131,31 +145,31 @@ export default function DashboardPage() {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Failed to skip practice");
 
-    await loadDashboard();
+    await loadDashboard(currentDate);
   };
 
   // Todo actions
-  const handleAddTodo = async (title: string, isCoreGoal: boolean) => {
+  const handleAddTodo = async (title: string, isCoreGoal: boolean, date: string) => {
     const res = await fetch("/api/todos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, isCoreGoal }),
+      body: JSON.stringify({ title, isCoreGoal, date }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Failed to add task");
 
-    await loadDashboard();
+    await loadDashboard(currentDate);
   };
 
   const handleToggleTodo = async (id: string, isCompleted: boolean) => {
     // Optimistic update
     if (data) {
-      const updatedTodos = data.todayLog.todos.map((t) =>
+      const updatedTodos = data.selectedLog.todos.map((t) =>
         t.id === id ? { ...t, isCompleted } : t
       );
       setData({
         ...data,
-        todayLog: { ...data.todayLog, todos: updatedTodos },
+        selectedLog: { ...data.selectedLog, todos: updatedTodos },
       });
     }
 
@@ -166,29 +180,48 @@ export default function DashboardPage() {
         body: JSON.stringify({ isCompleted }),
       });
       if (!res.ok) {
-        // Rollback
-        await loadDashboard();
+        await loadDashboard(currentDate);
       }
     } catch {
-      await loadDashboard();
+      await loadDashboard(currentDate);
     }
   };
 
   const handleDeleteTodo = async (id: string) => {
-    // Optimistic delete
     if (data) {
-      const updatedTodos = data.todayLog.todos.filter((t) => t.id !== id);
+      const updatedTodos = data.selectedLog.todos.filter((t) => t.id !== id);
       setData({
         ...data,
-        todayLog: { ...data.todayLog, todos: updatedTodos },
+        selectedLog: { ...data.selectedLog, todos: updatedTodos },
       });
     }
 
     try {
       await fetch(`/api/todos/${id}`, { method: "DELETE" });
     } catch {
-      await loadDashboard();
+      await loadDashboard(currentDate);
     }
+  };
+
+  // Save 30-Day Batch Roadmap
+  const handleSaveRoadmap = async (
+    startDate: string,
+    days: Array<{
+      date: string;
+      dayNumber: number;
+      coreGoal: string;
+      subTasks: string[];
+    }>
+  ) => {
+    const res = await fetch("/api/roadmap/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ startDate, days }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Failed to save roadmap batch");
+
+    await loadDashboard(currentDate);
   };
 
   const handleSaveSettings = async (updated: Partial<UserSettingsType>) => {
@@ -200,17 +233,17 @@ export default function DashboardPage() {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Failed to update settings");
 
-    await loadDashboard();
+    await loadDashboard(currentDate);
   };
 
   // LOADING STATE
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-4">
+      <main className="min-h-screen flex items-center justify-center p-4 bg-canvas">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-          <p className="text-xs font-mono text-slate-400">
-            Initializing Career Shift Tracker...
+          <Loader2 className="w-8 h-8 text-obsidian animate-spin" />
+          <p className="text-xs font-mono text-ink-muted">
+            Initializing 30-Day Career Shift Engine...
           </p>
         </div>
       </main>
@@ -220,16 +253,16 @@ export default function DashboardPage() {
   // ERROR STATE
   if (error || !data) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-md w-full p-6 rounded-xl bg-slate-900 border border-rose-500/30 text-center">
-          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-3" />
-          <h2 className="text-base font-bold text-white mb-2">
+      <main className="min-h-screen flex items-center justify-center p-4 bg-canvas">
+        <div className="max-w-md w-full p-6 rounded-2xl bg-white border border-hairline text-center shadow-xs">
+          <AlertCircle className="w-8 h-8 text-rose-600 mx-auto mb-3" />
+          <h2 className="text-base font-bold text-ink-primary mb-2">
             Failed to load dashboard
           </h2>
-          <p className="text-xs text-slate-400 mb-4">{error}</p>
+          <p className="text-xs text-ink-muted mb-4">{error}</p>
           <button
-            onClick={loadDashboard}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold"
+            onClick={() => loadDashboard()}
+            className="px-4 py-2 bg-obsidian text-white rounded-xl text-xs font-semibold hover:bg-ink-secondary transition-colors"
           >
             Retry Connection
           </button>
@@ -238,84 +271,105 @@ export default function DashboardPage() {
     );
   }
 
-  const { userSettings, todayLog, history30Days, todayIST, pinRequired, authenticated } = data;
+  const {
+    userSettings,
+    todayIST,
+    selectedLog,
+    todayLog,
+    roadmapDates,
+    history30Days,
+    pinRequired,
+    authenticated,
+  } = data;
+
   const showPinGate = pinRequired && !authenticated;
-
-  const coreGoal = todayLog.todos?.find((t) => t.isCoreGoal);
-  const isPracticeActive = todayLog.status === "PENDING" && Boolean(todayLog.startedAt);
-  const isLocked = todayLog.status === "COMPLETED" || todayLog.status === "SKIPPED";
-
-  // Compute last 30 dates array for consistency strip
-  const dates30 = Object.keys(history30Days);
+  const planStart = userSettings.planStartDate || todayIST;
+  const currentDayNumber = getDayNumber(currentDate, planStart);
+  const validDayNumber =
+    currentDayNumber >= 1 && currentDayNumber <= 30 ? currentDayNumber : null;
 
   return (
-    <main className="min-h-screen py-8 px-4 sm:px-6">
+    <div className="min-h-screen bg-canvas text-ink-primary flex flex-col font-sans selection:bg-obsidian selection:text-white">
       {/* PIN GATE OVERLAY */}
       <PinModal
         isOpen={showPinGate}
         onAuthenticated={() => {
-          loadDashboard();
+          loadDashboard(currentDate);
         }}
       />
 
-      {/* SINGLE COLUMN FOCUSED CONTAINER (Max 720px) */}
-      <div className="max-w-2xl mx-auto">
-        {/* HEADER */}
-        <Header
-          userName={userSettings.userName}
-          targetRole={userSettings.targetCareerRole}
-          todayIST={todayIST}
-          isDark={isDark}
-          onToggleTheme={toggleTheme}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          isPinProtected={pinRequired}
-          onLockApp={handleLockApp}
-        />
+      {/* TOP MINIMALIST HEADER BAR */}
+      <Header
+        userName={userSettings.userName}
+        targetRole={userSettings.targetCareerRole}
+        selectedDate={currentDate}
+        todayIST={todayIST}
+        onSelectDate={handleSelectDate}
+        onPrevDate={handlePrevDate}
+        onNextDate={handleNextDate}
+        onOpenRoadmap={() => setIsRoadmapOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        isPinProtected={pinRequired}
+        onLockApp={handleLockApp}
+      />
 
-        {/* STREAK & RECORD CARD */}
-        <StreakCard
-          currentStreak={userSettings.currentStreak}
-          longestStreak={userSettings.longestStreak}
-          status={todayLog.status}
-          isSessionActive={isPracticeActive}
-        />
+      {/* ASYMMETRIC 65 / 35 SPLIT WORKSPACE */}
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-8 flex flex-col lg:flex-row gap-6 items-start">
+        {/* LEFT EXECUTION CANVAS (65% Width) */}
+        <div className="w-full lg:flex-[65] self-stretch flex">
+          <ExecutionCanvas
+            selectedLog={selectedLog}
+            selectedDate={currentDate}
+            todayIST={todayIST}
+            dayNumber={validDayNumber}
+            onAddTodo={handleAddTodo}
+            onToggleTodo={handleToggleTodo}
+            onDeleteTodo={handleDeleteTodo}
+            onCompletePractice={handleCompletePractice}
+            onOpenSkipModal={() => setIsSkipModalOpen(true)}
+            isCompleting={isCompletingPractice}
+          />
+        </div>
 
-        {/* PRACTICE EXECUTION CARD (States: Idle, Focus Mode, Completed, Skipped, Missed) */}
-        <PracticeCard
-          todayLog={todayLog}
-          coreGoal={coreGoal}
-          onStartPractice={handleStartPractice}
-          onCompletePractice={handleCompletePractice}
-          onOpenSkipModal={() => setIsSkipModalOpen(true)}
-          isStarting={isStartingPractice}
-          isCompleting={isCompletingPractice}
-        />
+        {/* RIGHT TELEMETRY RAIL (35% Width) */}
+        <div className="w-full lg:flex-[35]">
+          <TelemetryRail
+            currentStreak={userSettings.currentStreak}
+            longestStreak={userSettings.longestStreak}
+            todayLog={todayLog}
+            selectedDate={currentDate}
+            todayIST={todayIST}
+            planStartDate={planStart}
+            roadmapDates={roadmapDates}
+            history30Days={history30Days}
+            onSelectDate={handleSelectDate}
+            onStartPractice={handleStartPractice}
+            isStarting={isStartingPractice}
+          />
+        </div>
+      </main>
 
-        {/* DAILY TODO CHECKLIST & CORE GOAL */}
-        <TodoList
-          todos={todayLog.todos || []}
-          onAddTodo={handleAddTodo}
-          onToggleTodo={handleToggleTodo}
-          onDeleteTodo={handleDeleteTodo}
-          isLocked={isLocked}
-        />
+      {/* FOOTER */}
+      <footer className="w-full border-t border-hairline py-4 px-6 text-center text-xs text-ink-muted">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>
+            Career Shift Tracker (v2 Roadmap Edition) &bull; Linear/Geist Editorial Architecture
+          </span>
+          <span className="font-mono text-[11px]">
+            IST Engine (UTC+5:30) &bull; Next.js 14 & Prisma MongoDB
+          </span>
+        </div>
+      </footer>
 
-        {/* 30-DAY CONSISTENCY STRIP */}
-        <ConsistencyStrip
-          todayIST={todayIST}
-          history={history30Days}
-          dates={dates30}
-        />
+      {/* 30-DAY BATCH ROADMAP PLANNER DRAWER */}
+      <RoadmapPlannerDrawer
+        isOpen={isRoadmapOpen}
+        onClose={() => setIsRoadmapOpen(false)}
+        currentStartDate={planStart}
+        onSaveRoadmap={handleSaveRoadmap}
+      />
 
-        {/* FOOTER */}
-        <footer className="mt-8 pt-4 border-t border-slate-800/80 text-center text-xs text-slate-500">
-          <p>
-            Career Shift Tracker &bull; Distraction-Free Focused Architecture &bull; Next.js 14 & Prisma
-          </p>
-        </footer>
-      </div>
-
-      {/* MODALS */}
+      {/* INTENTIONAL SKIP FRICTION MODAL */}
       <SkipModal
         isOpen={isSkipModalOpen}
         onClose={() => setIsSkipModalOpen(false)}
@@ -324,12 +378,13 @@ export default function DashboardPage() {
         partnerEmail={userSettings.partnerEmail}
       />
 
+      {/* SETTINGS MODAL */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={userSettings}
         onSaveSettings={handleSaveSettings}
       />
-    </main>
+    </div>
   );
 }

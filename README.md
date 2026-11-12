@@ -1,47 +1,45 @@
-# Career Shift Accountability & Streak Tracker
+# Career Shift Accountability & 30-Day Streak Tracker (v2 — 30-Day Roadmap Edition)
 
-> **Next.js 14+ (App Router)** &bull; **MongoDB + Prisma ORM** &bull; **Nodemailer SMTP Automation** &bull; **Vercel Cron Jobs** &bull; **Distraction-Free Focused UI/UX**
+> **Next.js 14+ (App Router)** &bull; **MongoDB + Prisma ORM** &bull; **Light Editorial UI (65/35 Split)** &bull; **30-Day Pre-Planned Schedule & SMTP**
 
-A calm, distraction-free accountability system designed specifically for software engineers and professionals executing a high-stakes career transition. Instead of overwhelming you with folders, kanban boards, or infinite backlogs, this app enforces a single daily ritual: commit to one primary **#1 Core Goal**, execute focused practice, protect an unbroken streak, and face structured accountability via automated SMTP email alerts if a day is skipped or missed.
-
----
-
-## ⚡ Key Highlights & Architecture
-
-- **Single-Screen Focus UI**: Centered 720px column (`max-w-2xl mx-auto`), high-contrast dark palette (`#0F172A`), zero-noise interface with generous whitespace and clear micro-interactions.
-- **Micro-UX & State Transitions**:
-  1. *Idle State*: Target Career Role badge, active streak flame counter, pinned Core Goal, and prominent *Start Today's Practice* CTA.
-  2. *Active Focus Mode*: Real-time ticking focus timer (`00:45:12`), dimmed secondary distractions, and interactive checklist.
-  3. *Completion Flow*: Checking off the #1 Core Goal unlocks the primary *Complete Today's Practice* button with celebratory confetti and streak increment.
-  4. *Intentional Skip Friction*: Clicking *Skip Today* requires a mandatory 15-character genuine reason, resets streak to 0, and dispatches automated SMTP alerts to you and your partner.
-  5. *30-Day Consistency Strip*: Visual 30-day block tracker with color-coded feedback (Emerald = Completed, Amber = Skipped, Rose = Missed, Indigo = Today).
-- **Timezone-Normalized Streak Engine**: All dates are normalized to `Asia/Kolkata` (`YYYY-MM-DD`) to avoid UTC midnight drift:
-  - *Yesterday match*: increments `currentStreak + 1`
-  - *Same-day idempotency*: preserves streak without double counting
-  - *Gap / First day*: resets `currentStreak = 1`
-  - *Record tracking*: updates `longestStreak = max(longestStreak, currentStreak)`
-- **Automated Vercel Cron Schedules**:
-  - `03:30 UTC` (9:00 AM IST): Morning Reminder with today's Core Goal and checklist.
-  - `15:30 UTC` (9:00 PM IST): Evening Audit. If pending, automatically marks `MISSED`, resets streak to 0, and sends streak reset alert.
-- **PIN Gate Access Control**: Zero-friction 4-digit PIN authentication (`APP_PIN`) stored in an HTTP-only secure session cookie.
+A calm, high-agency career transition operating system. Instead of waking up wondering what to study, pre-plan an entire 30-day (1-month) transition sprint upfront or import a 30-day syllabus. Each day, the workspace loads that specific date's pre-scheduled Core Goal and checklist, counts live focus time, maintains an unbroken streak, and enforces accountability through automated SMTP notifications and Vercel Cron.
 
 ---
 
-## 🛠️ Tech Stack
+## ⚡ What's New in v2 (Roadmap Edition)
 
-- **Framework**: Next.js 14+ (App Router, TypeScript)
-- **Styling**: Tailwind CSS, Lucide Icons, Canvas Confetti
+- **Asymmetric 65 / 35 Split Workspace**:
+  - **Left Execution Canvas (65% Width)**: Features the active day badge (`DAY 14 OF 30 • TODAY`), bold Core Goal card, sub-tasks checklist (with inline add/edit/delete), and the solid obsidian `Complete Practice` action bar alongside a quiet `Skip today` link.
+  - **Right Telemetry Rail (35% Width)**: Swiss-grid cards separating telemetry from execution: (1) Active Streak & Personal Best record, (2) Live Focus Session Timer (`Start Practice` / `00:42:18 Active`), and (3) Interactive 30-Day Consistency Matrix.
+- **Light-Mode Editorial UI**: Built on warm off-white surfaces (`#FAFAFA`), pure white elevated cards (`#FFFFFF`), crisp hairline borders (`1px solid #E4E4E7`), and obsidian typography (`#09090B`) inspired by Linear, Vercel Geist, and Notion.
+- **30-Day Batch Roadmap Planner**:
+  - Dedicated drawer to plan and schedule all 30 days upfront.
+  - One-click *Load 30-Day Full-Stack Syllabus* (TypeScript, Next.js 14, PostgreSQL, MongoDB, System Design, Testing, Docker, CI/CD, Capstone, Resume & Mock Interviews).
+  - Ability to paste any 30-day custom syllabus in plain text.
+  - Batch-upserts 30 `DailyLog` documents and linked `TodoItem`s in MongoDB via `POST /api/roadmap/batch`.
+- **Interactive Day-Wise Navigation**:
+  - Top header date switcher (`< Thu, Nov 12 >`) to browse any day in the 30-day roadmap.
+  - Clicking any cell in the 30-Day Consistency Matrix immediately jumps to that date's plan.
+  - Future days open in *Pre-Planning Mode* (editable tasks; practice execution unlocks on the calendar date).
+  - Past days open in *Audit Mode* with completion badges, duration, or logged skip reasons.
+
+---
+
+## 🛠️ Architecture & Tech Stack
+
+- **Framework**: Next.js 14+ (App Router, Server & Client Components, Route Handlers)
 - **Database & ORM**: MongoDB Atlas + Prisma ORM (with local fallback store for instant zero-dependency testing)
+- **Styling**: Tailwind CSS, Lucide Icons, Canvas Confetti
 - **Email Automation**: Nodemailer (SMTP with Google App Passwords)
-- **Cron Jobs**: Vercel Cron (`vercel.json`)
-- **Deployment Target**: Vercel Serverless
+- **Cron Jobs**: Vercel Cron (`vercel.json` at 9:00 AM IST & 9:00 PM IST)
+- **Access Control**: PIN Gate (`APP_PIN` + HTTP-only session cookie)
 
 ---
 
 ## 📂 Project Structure
 
 ```
-├── .env.example                     # Environment variable blueprint
+├── .env.example                     # Environment configuration
 ├── vercel.json                      # Vercel Cron schedule (9 AM & 9 PM IST)
 ├── prisma/
 │   └── schema.prisma                # MongoDB schema (UserSettings, DailyLog, TodoItem)
@@ -52,28 +50,28 @@ A calm, distraction-free accountability system designed specifically for softwar
 │   │   │   ├── auth/logout/route.ts         # Session clearance
 │   │   │   ├── cron/morning-reminder/route.ts # 9:00 AM IST Cron handler
 │   │   │   ├── cron/evening-check/route.ts    # 9:00 PM IST Cron handler
-│   │   │   ├── dashboard/route.ts           # Unified daily state API
-│   │   │   ├── practice/start/route.ts      # Focus mode trigger
+│   │   │   ├── dashboard/route.ts           # Day-wise state (?date=YYYY-MM-DD)
+│   │   │   ├── practice/start/route.ts      # Focus timer trigger
 │   │   │   ├── practice/complete/route.ts   # Core goal verification & streak calculation
 │   │   │   ├── practice/skip/route.ts       # Friction skip & email dispatch
+│   │   │   ├── roadmap/batch/route.ts       # 30-Day batch syllabus persistence
 │   │   │   ├── settings/route.ts            # User profile update
 │   │   │   ├── settings/test-email/route.ts # SMTP delivery test
-│   │   │   └── todos/route.ts               # Core goal and task manager
-│   │   ├── globals.css              # Custom styling, dark/light variables
+│   │   │   └── todos/route.ts               # Date-aware task manager
+│   │   ├── globals.css              # Light-mode editorial design tokens
 │   │   ├── layout.tsx               # Root layout
-│   │   └── page.tsx                 # Single-screen focus dashboard
+│   │   └── page.tsx                 # 65/35 Asymmetric Workspace
 │   ├── components/
-│   │   ├── ConsistencyStrip.tsx     # 30-Day visual momentum strip
-│   │   ├── Header.tsx               # Role badge, date display, theme & PIN lock
-│   │   ├── PinModal.tsx             # 4-digit numeric access pad
-│   │   ├── PracticeCard.tsx         # Idle / Focus / Completed / Skipped states
+│   │   ├── ExecutionCanvas.tsx      # Left 65% execution canvas & checklists
+│   │   ├── Header.tsx               # Minimalist breadcrumb & date switcher
+│   │   ├── PinModal.tsx             # 4-digit access pad
+│   │   ├── RoadmapPlannerDrawer.tsx # 30-Day batch syllabus editor
 │   │   ├── SettingsModal.tsx        # Profile, partner email, SMTP test
-│   │   ├── SkipModal.tsx            # 15-char minimum intentional skip friction
-│   │   ├── StreakCard.tsx           # Streak flame, record tracker, status pill
-│   │   └── TodoList.tsx             # #1 Core Goal highlight & checklist
+│   │   ├── SkipModal.tsx            # 15-char intentional skip friction
+│   │   └── TelemetryRail.tsx        # Right 35% rail (Streak, Live Timer, 30-Day Matrix)
 │   └── lib/
 │       ├── auth.ts                  # PIN authentication utilities
-│       ├── dateUtils.ts             # Asia/Kolkata date normalizer & formatters
+│       ├── dateUtils.ts             # Asia/Kolkata date normalizer & roadmap math
 │       ├── db.ts                    # Resilient Prisma MongoDB + local fallback
 │       ├── email.ts                 # Nodemailer transporter & connection verify
 │       ├── emailTemplates.ts        # Responsive HTML email templates
@@ -84,23 +82,18 @@ A calm, distraction-free accountability system designed specifically for softwar
 
 ## 🚀 Getting Started
 
-### 1. Clone the repository
+### 1. Clone & Install
 ```bash
 git clone https://github.com/benayaram-sandspace/Career-Tracker.git
 cd Career-Tracker
-```
-
-### 2. Install dependencies
-```bash
 npm install
 ```
 
-### 3. Configure Environment Variables
-Copy `.env.example` to `.env`:
+### 2. Configure Environment
 ```bash
 cp .env.example .env
 ```
-Fill in the credentials:
+Populate `.env`:
 ```env
 DATABASE_URL="mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/careershift?retryWrites=true&w=majority"
 APP_PIN="1234"
@@ -113,28 +106,27 @@ CRON_SECRET="replace-with-random-32-character-secret"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
-### 4. Run Development Server
+### 3. Run Locally
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
 ## 🌐 Production Deployment Guide (Vercel + MongoDB Atlas)
 
 1. **MongoDB Atlas Network Access**:
-   - In MongoDB Atlas &rarr; **Network Access**, add `0.0.0.0/0` (Allow Access from Anywhere) so Vercel's serverless lambdas can connect without timeout errors.
+   - In MongoDB Atlas &rarr; **Network Access**, add `0.0.0.0/0` (Allow Access from Anywhere) so Vercel's serverless functions connect without timeouts.
 2. **Gmail SMTP App Password**:
-   - Enable 2-Step Verification on your Google Account.
-   - Go to Google Account &rarr; Security &rarr; App Passwords &rarr; Create "Career Tracker" to generate a 16-character password for `SMTP_PASS`.
+   - Enable 2-Step Verification on the sender Google account.
+   - Go to Google Account &rarr; Security &rarr; App Passwords &rarr; Generate a 16-character password for `SMTP_PASS`.
 3. **Deploy to Vercel**:
-   - Import the repository into Vercel.
-   - Add all environment variables from `.env.example` into Vercel Project Settings.
-   - Deploy to the `main` production branch.
-4. **Verify Vercel Cron Jobs**:
-   - In the Vercel Dashboard, go to **Cron Jobs** tab to view `/api/cron/morning-reminder` (9:00 AM IST) and `/api/cron/evening-check` (9:00 PM IST).
-   - Use the **Settings &rarr; Send Test Email** button in the app to verify SMTP credentials immediately.
+   - Push to `main` and import into Vercel.
+   - Supply environment variables in Vercel Project Settings.
+4. **Vercel Cron Verification**:
+   - Vercel Cron automatically picks up `vercel.json` (03:30 UTC for 9:00 AM IST and 15:30 UTC for 9:00 PM IST).
+   - Test both cron routes directly from the Vercel Dashboard &rarr; Cron Jobs tab.
 
 ---
 

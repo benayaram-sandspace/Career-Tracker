@@ -1,6 +1,6 @@
 /**
  * Date and Time utilities normalized to Asia/Kolkata timezone
- * Prevents UTC midnight drift as specified in Technical Brief.
+ * Prevents UTC midnight drift as specified in Technical Brief v2.
  */
 
 export function getTodayIST(timezone: string = "Asia/Kolkata"): string {
@@ -13,23 +13,32 @@ export function getTodayIST(timezone: string = "Asia/Kolkata"): string {
   return formatter.format(new Date());
 }
 
-export function getOffsetDateIST(offsetDays: number, timezone: string = "Asia/Kolkata"): string {
-  const d = new Date(Date.now() + offsetDays * 86400000);
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return formatter.format(d);
+export function addDaysToDate(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day + days));
+  return d.toISOString().split("T")[0];
 }
 
 export function getYesterdayIST(timezone: string = "Asia/Kolkata"): string {
-  return getOffsetDateIST(-1, timezone);
+  const today = getTodayIST(timezone);
+  return addDaysToDate(today, -1);
 }
 
-export function getLast30DaysIST(timezone: string = "Asia/Kolkata"): string[] {
-  return Array.from({ length: 30 }, (_, i) => getOffsetDateIST(i - 29, timezone));
+export function getRoadmapDates(startDate: string, count: number = 30): string[] {
+  const dates: string[] = [];
+  for (let i = 0; i < count; i++) {
+    dates.push(addDaysToDate(startDate, i));
+  }
+  return dates;
+}
+
+export function getDayNumber(targetDate: string, startDate: string): number {
+  const [y1, m1, d1] = startDate.split("-").map(Number);
+  const [y2, m2, d2] = targetDate.split("-").map(Number);
+  const start = Date.UTC(y1, m1 - 1, d1);
+  const target = Date.UTC(y2, m2 - 1, d2);
+  const diffDays = Math.round((target - start) / (1000 * 60 * 60 * 24));
+  return diffDays + 1; // 1-based index
 }
 
 export function formatDateDisplay(dateStr: string): string {
@@ -40,6 +49,21 @@ export function formatDateDisplay(dateStr: string): string {
       weekday: "short",
       month: "short",
       day: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+export function formatHeaderDate(dateStr: string): string {
+  try {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   } catch {
     return dateStr;

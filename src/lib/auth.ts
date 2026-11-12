@@ -21,3 +21,4 @@ export async function isUserAuthenticated(): Promise<boolean> {
 
   return pinCookie?.value === expectedPin;
 }
+

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, isCoreGoal } = body;
+    const { title, isCoreGoal, date, order } = body;
 
     if (!title || typeof title !== "string" || title.trim().length === 0) {
       return NextResponse.json(
@@ -17,9 +17,14 @@ export async function POST(req: NextRequest) {
     }
 
     const settings = await getUserSettings();
-    const today = getTodayIST(settings.timezone);
+    const targetDate = date || getTodayIST(settings.timezone);
 
-    const todo = await createTodoItem(today, title.trim(), Boolean(isCoreGoal));
+    const todo = await createTodoItem(
+      targetDate,
+      title.trim(),
+      Boolean(isCoreGoal),
+      typeof order === "number" ? order : 0
+    );
     return NextResponse.json({ todo }, { status: 201 });
   } catch (error: any) {
     console.error("POST /api/todos error:", error);

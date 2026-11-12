@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Lock, KeyRound, AlertCircle, ArrowRight } from "lucide-react";
+import { Lock, ArrowRight, AlertCircle } from "lucide-react";
 
 interface PinModalProps {
   isOpen: boolean;
@@ -48,7 +48,6 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
       const nextPin = pin + num;
       setPin(nextPin);
       if (nextPin.length === 4) {
-        // Auto submit if 4 digits
         setTimeout(() => {
           fetch("/api/auth/pin", {
             method: "POST",
@@ -71,16 +70,16 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-      <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-center">
-        <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto mb-4 text-indigo-400">
-          <Lock className="w-6 h-6" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+      <div className="w-full max-w-sm bg-white border border-hairline rounded-2xl p-7 shadow-2xl text-center">
+        <div className="w-12 h-12 rounded-2xl bg-subtle border border-hairline flex items-center justify-center mx-auto mb-4 text-ink-primary">
+          <Lock className="w-5 h-5" />
         </div>
 
-        <h2 className="text-lg font-bold text-white mb-1">
+        <h2 className="text-base sm:text-lg font-bold text-ink-primary mb-1">
           Career Shift Tracker
         </h2>
-        <p className="text-xs text-slate-400 mb-6">
+        <p className="text-xs text-ink-muted mb-6">
           Enter your Access PIN to unlock your focus workspace
         </p>
 
@@ -91,10 +90,10 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
             return (
               <div
                 key={idx}
-                className={`w-4 h-4 rounded-full border transition-all ${
+                className={`w-3.5 h-3.5 rounded-full border transition-all ${
                   hasChar
-                    ? "bg-indigo-500 border-indigo-400 scale-110 shadow-sm shadow-indigo-500/50"
-                    : "border-slate-700 bg-slate-950"
+                    ? "bg-obsidian border-obsidian scale-110"
+                    : "border-hairline bg-subtle"
                 }`}
               />
             );
@@ -102,7 +101,7 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
         </div>
 
         {error && (
-          <div className="mb-4 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-center justify-center gap-1.5">
+          <div className="mb-4 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center justify-center gap-1.5">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -117,7 +116,7 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
                   key={key}
                   type="button"
                   onClick={handleBackspace}
-                  className="h-12 rounded-xl bg-slate-950/60 hover:bg-slate-800 text-slate-400 font-medium text-xs transition-colors"
+                  className="h-12 rounded-xl bg-subtle hover:bg-hairline text-ink-secondary font-medium text-xs transition-colors"
                 >
                   DEL
                 </button>
@@ -130,7 +129,7 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
                   type="button"
                   onClick={() => handleSubmit()}
                   disabled={isSubmitting || !pin}
-                  className="h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors flex items-center justify-center"
+                  className="h-12 rounded-xl bg-obsidian hover:bg-ink-secondary text-white font-bold text-xs transition-colors flex items-center justify-center shadow-xs"
                 >
                   <ArrowRight className="w-4 h-4" />
                 </button>
@@ -141,7 +140,7 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
                 key={key}
                 type="button"
                 onClick={() => handleKeyPress(key)}
-                className="h-12 rounded-xl bg-slate-950/60 hover:bg-slate-800 text-white font-mono text-base font-bold transition-colors active:scale-95"
+                className="h-12 rounded-xl bg-subtle hover:bg-hairline text-ink-primary font-mono text-base font-bold transition-colors active:scale-95"
               >
                 {key}
               </button>
@@ -149,8 +148,8 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
           })}
         </div>
 
-        <p className="text-[11px] text-slate-500">
-          Default PIN is <code className="text-indigo-400">1234</code> if configured in .env
+        <p className="text-[11px] text-ink-muted">
+          Default PIN is <code className="text-ink-primary font-mono">1234</code> if configured in .env
         </p>
       </div>
     </div>
