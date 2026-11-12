@@ -369,3 +369,4 @@ export function ExecutionCanvas({
     </div>
   );
 }
+
