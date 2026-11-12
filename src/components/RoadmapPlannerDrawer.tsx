@@ -7,10 +7,12 @@ import {
   Save,
   Wand2,
   FileText,
-  CheckCircle2,
+  Copy,
+  Check,
   Sparkles,
   ChevronDown,
   ChevronUp,
+  Info,
 } from "lucide-react";
 import { addDaysToDate, formatDateDisplay } from "@/lib/dateUtils";
 
@@ -63,6 +65,15 @@ const DEFAULT_30_DAY_SYLLABUS = [
   { goal: "Sprint Retrospective & Job Application Launch", tasks: ["Review 30-day streak & metrics", "Submit 10 targeted engineering applications", "Schedule networking coffee chats"] },
 ];
 
+export const SAMPLE_SYLLABUS_TEXT = DEFAULT_30_DAY_SYLLABUS.map(
+  (item, idx) => `Day ${idx + 1}: ${item.goal} - ${item.tasks.join(", ")}`
+).join("\n");
+
+export const BLANK_TEMPLATE_TEXT = Array.from(
+  { length: 30 },
+  (_, i) => `Day ${i + 1}: [Your Core Goal] - Task 1, Task 2, Task 3`
+).join("\n");
+
 export function RoadmapPlannerDrawer({
   isOpen,
   onClose,
@@ -84,8 +95,19 @@ export function RoadmapPlannerDrawer({
   const [isSaving, setIsSaving] = useState(false);
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [pastedText, setPastedText] = useState("");
+  const [copiedType, setCopiedType] = useState<"sample" | "blank" | null>(null);
 
   if (!isOpen) return null;
+
+  const handleCopyText = async (text: string, type: "sample" | "blank") => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedType(type);
+      setTimeout(() => setCopiedType(null), 2500);
+    } catch {
+      // Fallback
+    }
+  };
 
   const handleLoadCuratedSyllabus = () => {
     const updated = planDays.map((d, idx) => {
@@ -104,14 +126,30 @@ export function RoadmapPlannerDrawer({
     const updated = [...planDays];
 
     lines.slice(0, 30).forEach((line, idx) => {
-      // Split by colon or dash
-      const parts = line.replace(/^Day\s*\d+[\s:\.\-]*/i, "").split(/[-–—:]/);
-      const coreGoal = parts[0]?.trim() || line.trim();
-      const subTasks = parts.slice(1).join(", ").trim();
+      // Remove leading "Day X:" or "Day X -"
+      const cleaned = line.replace(/^Day\s*\d+[\s:\.\-]*/i, "").trim();
+
+      // Split into Core Goal and Subtasks (supports " - ", " : ", or " | ")
+      let coreGoal = cleaned;
+      let subTasks = "";
+
+      if (cleaned.includes(" - ")) {
+        const parts = cleaned.split(" - ");
+        coreGoal = parts[0]?.trim();
+        subTasks = parts.slice(1).join(", ").trim();
+      } else if (cleaned.includes(" : ")) {
+        const parts = cleaned.split(" : ");
+        coreGoal = parts[0]?.trim();
+        subTasks = parts.slice(1).join(", ").trim();
+      } else if (cleaned.includes(" | ")) {
+        const parts = cleaned.split(" | ");
+        coreGoal = parts[0]?.trim();
+        subTasks = parts.slice(1).join(", ").trim();
+      }
 
       updated[idx] = {
         dayNumber: idx + 1,
-        coreGoal,
+        coreGoal: coreGoal || `Day ${idx + 1} Deliverable`,
         subTasks,
       };
     });
@@ -187,7 +225,7 @@ export function RoadmapPlannerDrawer({
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={handleLoadCuratedSyllabus}
@@ -202,18 +240,78 @@ export function RoadmapPlannerDrawer({
                 className="px-3 py-1.5 rounded-lg bg-white border border-hairline hover:bg-white/80 text-xs font-semibold text-ink-secondary flex items-center gap-1.5"
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>Paste Text</span>
+                <span>Paste Syllabus</span>
               </button>
+            </div>
+          </div>
+
+          {/* SAMPLE FORMAT & COPY BAR (Feature Requested) */}
+          <div className="p-4 rounded-xl bg-white border border-hairline shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-ink-primary">
+                <Info className="w-4 h-4 text-ink-muted" />
+                <span>Sample Structure & Syllabus Format</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(SAMPLE_SYLLABUS_TEXT, "sample")}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold border border-hairline bg-subtle hover:bg-white text-ink-primary transition-colors flex items-center gap-1"
+                >
+                  {copiedType === "sample" ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span className="text-emerald-700">Copied 30 Days!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-ink-muted" />
+                      <span>Copy Sample Syllabus</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(BLANK_TEMPLATE_TEXT, "blank")}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold border border-hairline bg-subtle hover:bg-white text-ink-secondary transition-colors flex items-center gap-1"
+                >
+                  {copiedType === "blank" ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span className="text-emerald-700">Copied Template!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-ink-muted" />
+                      <span>Copy Blank Template</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-subtle font-mono text-[11px] text-ink-secondary leading-relaxed border border-hairline/80">
+              <div className="text-[10px] uppercase font-bold text-ink-muted mb-1">
+                Syntax Format:
+              </div>
+              <div>Day 1: Master TypeScript Generics - Conditional types, Utility types</div>
+              <div>Day 2: Next.js 14 App Router Architecture - Server Actions, Streaming</div>
+              <div className="text-ink-muted">... (up to Day 30)</div>
             </div>
           </div>
 
           {/* PASTE MODAL */}
           {pasteModalOpen && (
-            <div className="p-4 rounded-xl bg-white border border-obsidian/30 shadow-sm space-y-3">
+            <div className="p-5 rounded-2xl bg-white border border-obsidian/30 shadow-md space-y-3 animate-fade-in">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-ink-primary">
-                  Paste 30-Day Syllabus (1 line per day)
-                </span>
+                <div>
+                  <span className="text-xs font-bold text-ink-primary block">
+                    Paste Your Custom 30-Day Syllabus
+                  </span>
+                  <span className="text-[11px] text-ink-muted">
+                    Format: <code className="bg-subtle px-1 py-0.5 rounded font-mono">Day X: Core Goal - Subtask 1, Subtask 2</code>
+                  </span>
+                </div>
                 <button
                   onClick={() => setPasteModalOpen(false)}
                   className="text-xs text-ink-muted hover:text-ink-primary"
@@ -221,20 +319,43 @@ export function RoadmapPlannerDrawer({
                   Cancel
                 </button>
               </div>
+
               <textarea
-                rows={6}
+                rows={7}
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
-                placeholder="Day 1: Advanced TypeScript - Generics, Utility Types&#10;Day 2: Next.js 14 App Router Architecture - Server Actions&#10;Day 3: PostgreSQL Modeling..."
-                className="w-full bg-subtle border border-hairline rounded-lg p-3 text-xs font-mono text-ink-primary focus:outline-none focus:border-obsidian"
+                placeholder="Day 1: Advanced TypeScript - Generics, Utility Types&#10;Day 2: Next.js 14 App Router - Server Actions, Streaming&#10;Day 3: PostgreSQL Modeling - Schema migrations, Indexes..."
+                className="w-full bg-subtle border border-hairline rounded-xl p-3 text-xs font-mono text-ink-primary focus:outline-none focus:border-obsidian"
               />
-              <button
-                type="button"
-                onClick={handleParsePastedSyllabus}
-                className="px-4 py-2 bg-obsidian text-white rounded-lg text-xs font-semibold"
-              >
-                Apply to 30 Days
-              </button>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPastedText(SAMPLE_SYLLABUS_TEXT)}
+                    className="text-[11px] text-ink-secondary hover:text-ink-primary underline font-medium"
+                  >
+                    Insert 30-Day Sample into Box
+                  </button>
+                  <span className="text-hairline">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setPastedText("")}
+                    className="text-[11px] text-ink-muted hover:text-rose-600 font-medium"
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleParsePastedSyllabus}
+                  disabled={!pastedText.trim()}
+                  className="px-4 py-2 bg-obsidian text-white rounded-xl text-xs font-semibold hover:bg-ink-secondary transition-colors disabled:opacity-40"
+                >
+                  Apply to 30 Days
+                </button>
+              </div>
             </div>
           )}
 
@@ -355,4 +476,3 @@ export function RoadmapPlannerDrawer({
     </div>
   );
 }
-

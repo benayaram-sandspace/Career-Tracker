@@ -7,7 +7,7 @@ import { TelemetryRail } from "@/components/TelemetryRail";
 import { RoadmapPlannerDrawer } from "@/components/RoadmapPlannerDrawer";
 import { SkipModal } from "@/components/SkipModal";
 import { SettingsModal } from "@/components/SettingsModal";
-import { PinModal } from "@/components/PinModal";
+import { LoginPage } from "@/components/LoginPage";
 import { UserSettingsType, DailyLogType, DayStatus } from "@/lib/db";
 import { addDaysToDate, getDayNumber } from "@/lib/dateUtils";
 import { Loader2, AlertCircle } from "lucide-react";
@@ -303,6 +303,19 @@ export default function DashboardPage() {
   } = data;
 
   const showPinGate = pinRequired && !authenticated;
+
+  // DEDICATED LOGIN SCREEN (Requested by user)
+  if (showPinGate) {
+    return (
+      <LoginPage
+        onAuthenticated={() => {
+          loadDashboard(currentDate);
+        }}
+        expectedPinConfigured={pinRequired}
+      />
+    );
+  }
+
   const planStart = userSettings.planStartDate || todayIST;
   const currentDayNumber = getDayNumber(currentDate, planStart);
   const validDayNumber =
@@ -310,14 +323,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-canvas text-ink-primary flex flex-col font-sans selection:bg-obsidian selection:text-white">
-      {/* PIN GATE OVERLAY */}
-      <PinModal
-        isOpen={showPinGate}
-        onAuthenticated={() => {
-          loadDashboard(currentDate);
-        }}
-      />
-
       {/* TOP MINIMALIST HEADER BAR */}
       <Header
         userName={userSettings.userName}
