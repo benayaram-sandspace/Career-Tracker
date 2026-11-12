@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     const history30Days = await get30DaysLogs(roadmapDates);
 
     const pinRequired = isPinProtectionEnabled();
-    const authenticated = await isUserAuthenticated();
+    const authenticated = await isUserAuthenticated(req);
 
     return NextResponse.json({
       userSettings,

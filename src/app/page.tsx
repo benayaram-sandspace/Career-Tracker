@@ -51,34 +51,65 @@ export default function DashboardPage() {
   const [isCompletingPractice, setIsCompletingPractice] = useState(false);
   const [isUndoingPractice, setIsUndoingPractice] = useState(false);
 
+  // Authenticated fetch wrapper supporting headers and credentials
+  const authFetch = useCallback(
+    (url: string, init?: RequestInit, pinOverride?: string) => {
+      const headers = new Headers(init?.headers);
+      if (!headers.has("Content-Type") && init?.body && typeof init.body === "string") {
+        headers.set("Content-Type", "application/json");
+      }
+      const pin =
+        pinOverride ||
+        (typeof window !== "undefined"
+          ? localStorage.getItem("career_tracker_pin") || ""
+          : "");
+      if (pin) {
+        headers.set("x-app-pin", pin);
+      }
+      return fetch(url, {
+        ...init,
+        headers,
+        credentials: "include",
+      });
+    },
+    []
+  );
+
   // Load dashboard data for a given date
-  const loadDashboard = useCallback(async (targetDate?: string) => {
-    try {
-      setError(null);
-      const url = targetDate
-        ? `/api/dashboard?date=${targetDate}`
-        : "/api/dashboard";
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) {
-        throw new Error("Failed to load dashboard data");
+  const loadDashboard = useCallback(
+    async (targetDate?: string, pinOverride?: string) => {
+      try {
+        setError(null);
+        const url = targetDate
+          ? `/api/dashboard?date=${targetDate}`
+          : "/api/dashboard";
+        const res = await authFetch(url, { cache: "no-store" }, pinOverride);
+        if (!res.ok) {
+          throw new Error("Failed to load dashboard data");
+        }
+        const json: DashboardData = await res.json();
+        setData(json);
+        if (!targetDate) {
+          setCurrentDate(json.todayIST);
+        } else {
+          setCurrentDate(targetDate);
+        }
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || "An unexpected error occurred loading data");
+      } finally {
+        setLoading(false);
       }
-      const json: DashboardData = await res.json();
-      setData(json);
-      if (!targetDate) {
-        setCurrentDate(json.todayIST);
-      } else {
-        setCurrentDate(targetDate);
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "An unexpected error occurred loading data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [authFetch]
+  );
 
   useEffect(() => {
-    loadDashboard();
+    const savedPin =
+      typeof window !== "undefined"
+        ? localStorage.getItem("career_tracker_pin") || undefined
+        : undefined;
+    loadDashboard(undefined, savedPin);
   }, [loadDashboard]);
 
   // Date switching handlers
@@ -99,7 +130,10 @@ export default function DashboardPage() {
 
   // Lock Dashboard (logout PIN)
   const handleLockApp = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("career_tracker_pin");
+    }
+    await authFetch("/api/auth/logout", { method: "POST" });
     if (data) {
       setData({ ...data, authenticated: false });
     }
@@ -109,7 +143,7 @@ export default function DashboardPage() {
   const handleStartPractice = async () => {
     setIsStartingPractice(true);
     try {
-      const res = await fetch("/api/practice/start", { method: "POST" });
+      const res = await authFetch("/api/practice/start", { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to start practice");
 
@@ -124,7 +158,7 @@ export default function DashboardPage() {
   const handleCompletePractice = async () => {
     setIsCompletingPractice(true);
     try {
-      const res = await fetch("/api/practice/complete", { method: "POST" });
+      const res = await authFetch("/api/practice/complete", { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to complete practice");
 
@@ -137,9 +171,8 @@ export default function DashboardPage() {
   };
 
   const handleSkipPractice = async (reason: string) => {
-    const res = await fetch("/api/practice/skip", {
+    const res = await authFetch("/api/practice/skip", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason }),
     });
     const json = await res.json();
@@ -152,9 +185,8 @@ export default function DashboardPage() {
   const handleUndoPractice = async () => {
     setIsUndoingPractice(true);
     try {
-      const res = await fetch("/api/practice/undo", {
+      const res = await authFetch("/api/practice/undo", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: currentDate }),
       });
       const json = await res.json();
@@ -170,9 +202,8 @@ export default function DashboardPage() {
 
   // Todo actions
   const handleAddTodo = async (title: string, isCoreGoal: boolean, date: string) => {
-    const res = await fetch("/api/todos", {
+    const res = await authFetch("/api/todos", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, isCoreGoal, date }),
     });
     const json = await res.json();
@@ -194,9 +225,8 @@ export default function DashboardPage() {
     }
 
     try {
-      const res = await fetch(`/api/todos/${id}`, {
+      const res = await authFetch(`/api/todos/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isCompleted }),
       });
       if (!res.ok) {
@@ -217,7 +247,7 @@ export default function DashboardPage() {
     }
 
     try {
-      await fetch(`/api/todos/${id}`, { method: "DELETE" });
+      await authFetch(`/api/todos/${id}`, { method: "DELETE" });
     } catch {
       await loadDashboard(currentDate);
     }
@@ -233,9 +263,8 @@ export default function DashboardPage() {
       subTasks: string[];
     }>
   ) => {
-    const res = await fetch("/api/roadmap/batch", {
+    const res = await authFetch("/api/roadmap/batch", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ startDate, days }),
     });
     const json = await res.json();
@@ -245,9 +274,8 @@ export default function DashboardPage() {
   };
 
   const handleSaveSettings = async (updated: Partial<UserSettingsType>) => {
-    const res = await fetch("/api/settings", {
+    const res = await authFetch("/api/settings", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updated),
     });
     const json = await res.json();
@@ -308,8 +336,11 @@ export default function DashboardPage() {
   if (showPinGate) {
     return (
       <LoginPage
-        onAuthenticated={() => {
-          loadDashboard(currentDate);
+        onAuthenticated={(verifiedPin: string) => {
+          // 1. Immediately unlock dashboard in client state
+          setData((prev) => (prev ? { ...prev, authenticated: true } : prev));
+          // 2. Fetch fresh dashboard data with verified PIN header
+          loadDashboard(currentDate, verifiedPin);
         }}
         expectedPinConfigured={pinRequired}
       />

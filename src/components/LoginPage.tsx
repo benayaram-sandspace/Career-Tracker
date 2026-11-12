@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Lock, ArrowRight, AlertCircle, Compass, ShieldCheck } from "lucide-react";
+import { Lock, ArrowRight, AlertCircle, Compass, ShieldCheck, Loader2 } from "lucide-react";
 
 interface LoginPageProps {
-  onAuthenticated: () => void;
+  onAuthenticated: (pin: string) => void;
   expectedPinConfigured: boolean;
 }
 
@@ -20,7 +20,8 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   }, []);
 
   const handleVerifyPin = async (pinToVerify: string) => {
-    if (!pinToVerify || isSubmitting) return;
+    const cleaned = pinToVerify.trim();
+    if (!cleaned || isSubmitting) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -29,12 +30,16 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       const res = await fetch("/api/auth/pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: pinToVerify }),
+        credentials: "include",
+        body: JSON.stringify({ pin: cleaned }),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        onAuthenticated();
+        if (typeof window !== "undefined") {
+          localStorage.setItem("career_tracker_pin", cleaned);
+        }
+        onAuthenticated(cleaned);
       } else {
         setError(data.error || "Incorrect PIN code. Please try again.");
         setPin("");
@@ -42,59 +47,58 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       }
     } catch (err: any) {
       setError(err.message || "Failed to verify PIN");
+      setPin("");
+      inputRef.current?.focus();
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleKeyPress = (num: string) => {
-    if (pin.length < 6) {
-      const nextPin = pin + num;
-      setPin(nextPin);
-      if (nextPin.length === 4) {
-        handleVerifyPin(nextPin);
-      }
+    if (isSubmitting) return;
+    const nextPin = (pin + num).slice(0, 8);
+    setPin(nextPin);
+    setError(null);
+    if (nextPin.length === 4) {
+      handleVerifyPin(nextPin);
     }
   };
 
   const handleBackspace = () => {
     setPin((prev) => prev.slice(0, -1));
     setError(null);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Backspace") {
-      handleBackspace();
-    } else if (e.key === "Enter") {
-      handleVerifyPin(pin);
-    } else if (/^[0-9]$/.test(e.key)) {
-      handleKeyPress(e.key);
-    }
+    inputRef.current?.focus();
   };
 
   return (
     <div
-      className="min-h-screen bg-canvas flex flex-col justify-between items-center py-10 px-4 sm:px-6 select-none"
+      className="min-h-screen bg-canvas flex flex-col justify-between items-center py-10 px-4 sm:px-6 select-none cursor-default"
       onClick={() => inputRef.current?.focus()}
-      onKeyDown={handleKeyDown}
-      tabIndex={0}
     >
-      {/* Hidden real input for mobile keyboard support */}
+      {/* Real input for physical keyboard and mobile keyboard support */}
       <input
         ref={inputRef}
         type="password"
         inputMode="numeric"
         pattern="[0-9]*"
-        maxLength={6}
+        maxLength={8}
         value={pin}
+        autoFocus
         onChange={(e) => {
-          const val = e.target.value.replace(/\D/g, "");
+          const val = e.target.value.replace(/\D/g, "").slice(0, 8);
           setPin(val);
+          setError(null);
           if (val.length === 4) {
             handleVerifyPin(val);
           }
         }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && pin.length >= 4) {
+            handleVerifyPin(pin);
+          }
+        }}
         className="opacity-0 absolute pointer-events-none w-0 h-0"
+        aria-label="Access PIN"
       />
 
       {/* TOP BRANDING */}
@@ -115,7 +119,11 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       <div className="w-full max-w-sm bg-white border border-hairline rounded-3xl p-8 sm:p-9 shadow-xs text-center my-auto animate-fade-in">
         {/* ICON */}
         <div className="w-14 h-14 rounded-2xl bg-subtle border border-hairline flex items-center justify-center mx-auto mb-5 text-ink-primary shadow-2xs">
-          <Lock className="w-6 h-6 stroke-[1.8]" />
+          {isSubmitting ? (
+            <Loader2 className="w-6 h-6 animate-spin text-ink-primary" />
+          ) : (
+            <Lock className="w-6 h-6 stroke-[1.8]" />
+          )}
         </div>
 
         <h1 className="text-xl sm:text-2xl font-bold text-ink-primary tracking-tight mb-1.5">
@@ -184,7 +192,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
                   className="h-12 rounded-2xl bg-obsidian hover:bg-ink-secondary text-white font-bold text-xs transition-all flex items-center justify-center shadow-xs disabled:opacity-40 active:scale-95"
                 >
                   {isSubmitting ? (
-                    <span className="animate-spin text-sm">&bull;</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <ArrowRight className="w-4 h-4" />
                   )}

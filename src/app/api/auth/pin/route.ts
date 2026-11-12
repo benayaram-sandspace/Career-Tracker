@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PIN_COOKIE_NAME, getExpectedPin } from "@/lib/auth";
+import { PIN_COOKIE_NAME, getExpectedPin, isUserAuthenticated } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(req: NextRequest) {
+  try {
+    const authenticated = await isUserAuthenticated(req);
+    return NextResponse.json({ authenticated });
+  } catch (error: any) {
+    return NextResponse.json({ authenticated: false, error: error.message }, { status: 500 });
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { pin } = body;
+    const pin = String(body.pin ?? "").trim();
 
     const expectedPin = getExpectedPin();
 
@@ -17,7 +26,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({
+      success: true,
+      authenticated: true,
+      token: pin,
+    });
+
     // Set 30-day secure session cookie
     response.cookies.set(PIN_COOKIE_NAME, pin, {
       httpOnly: true,

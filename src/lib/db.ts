@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 import { prisma } from "./prisma";
 import { getTodayIST, getYesterdayIST, getRoadmapDates, addDaysToDate } from "./dateUtils";
 
@@ -39,7 +40,16 @@ export interface DailyLogType {
   todos: TodoItemType[];
 }
 
-const LOCAL_DATA_FILE = path.join(process.cwd(), "data", "db.json");
+function getLocalDataFilePath(): string {
+  // On Vercel / serverless platforms, process.cwd() is read-only.
+  // Use os.tmpdir() (/tmp) which is always writable in serverless environments.
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.join(os.tmpdir(), "career_tracker_db.json");
+  }
+  return path.join(process.cwd(), "data", "db.json");
+}
+
+let inMemoryStore: LocalStore | null = null;
 
 interface LocalStore {
   userSettings: UserSettingsType;
@@ -67,14 +77,21 @@ function getInitialStore(): LocalStore {
 
 function readLocalStore(): LocalStore {
   try {
-    if (!fs.existsSync(LOCAL_DATA_FILE)) {
+    const filePath = getLocalDataFilePath();
+    if (!fs.existsSync(filePath)) {
+      if (inMemoryStore) return inMemoryStore;
       const initial = getInitialStore();
-      const dir = path.dirname(LOCAL_DATA_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(LOCAL_DATA_FILE, JSON.stringify(initial, null, 2), "utf-8");
+      inMemoryStore = initial;
+      try {
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(filePath, JSON.stringify(initial, null, 2), "utf-8");
+      } catch {
+        // Read-only filesystem or sandbox restriction; store remains safely in memory
+      }
       return initial;
     }
-    const data = fs.readFileSync(LOCAL_DATA_FILE, "utf-8");
+    const data = fs.readFileSync(filePath, "utf-8");
     const parsed = JSON.parse(data);
     if (parsed.dailyLogs) {
       for (const date in parsed.dailyLogs) {
@@ -89,20 +106,26 @@ function readLocalStore(): LocalStore {
         }
       }
     }
+    inMemoryStore = parsed;
     return parsed;
   } catch (e) {
     console.error("Error reading local store fallback:", e);
-    return getInitialStore();
+    if (inMemoryStore) return inMemoryStore;
+    const initial = getInitialStore();
+    inMemoryStore = initial;
+    return initial;
   }
 }
 
 function writeLocalStore(store: LocalStore) {
+  inMemoryStore = store;
   try {
-    const dir = path.dirname(LOCAL_DATA_FILE);
+    const filePath = getLocalDataFilePath();
+    const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(LOCAL_DATA_FILE, JSON.stringify(store, null, 2), "utf-8");
+    fs.writeFileSync(filePath, JSON.stringify(store, null, 2), "utf-8");
   } catch (e) {
-    console.error("Error writing local store fallback:", e);
+    console.warn("Local storage write warning (using in-memory cache):", e);
   }
 }
 
