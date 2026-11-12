@@ -36,3 +36,5 @@ yarn-error.log*
 
 # scratch files
 extracted_brief.txt
+
+.vercel
