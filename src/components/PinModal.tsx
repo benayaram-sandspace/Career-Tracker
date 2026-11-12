@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Lock, ArrowRight, AlertCircle } from "lucide-react";
+import { Lock, ArrowRight, AlertCircle, ShieldCheck } from "lucide-react";
 
 interface PinModalProps {
   isOpen: boolean;
@@ -148,9 +148,10 @@ export function PinModal({ isOpen, onAuthenticated }: PinModalProps) {
           })}
         </div>
 
-        <p className="text-[11px] text-ink-muted">
-          Default PIN is <code className="text-ink-primary font-mono">1234</code> if configured in .env
-        </p>
+        <div className="pt-2 border-t border-hairline text-[11px] text-ink-muted flex items-center justify-center gap-1">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Single-user protected workspace</span>
+        </div>
       </div>
     </div>
   );

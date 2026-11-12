@@ -10,8 +10,7 @@ export async function POST(req: NextRequest) {
 
     const expectedPin = getExpectedPin();
 
-    // If no pin is configured in environment, allow through or match default
-    if (expectedPin && pin !== expectedPin) {
+    if (!pin || pin !== expectedPin) {
       return NextResponse.json(
         { error: "Incorrect PIN code. Please try again." },
         { status: 401 }
@@ -19,8 +18,8 @@ export async function POST(req: NextRequest) {
     }
 
     const response = NextResponse.json({ success: true });
-    // Set 30-day session cookie
-    response.cookies.set(PIN_COOKIE_NAME, pin || "authenticated", {
+    // Set 30-day secure session cookie
+    response.cookies.set(PIN_COOKIE_NAME, pin, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -37,4 +36,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Lock, ArrowRight, AlertCircle, Compass, ShieldCheck, Check } from "lucide-react";
+import { Lock, ArrowRight, AlertCircle, Compass, ShieldCheck } from "lucide-react";
 
 interface LoginPageProps {
   onAuthenticated: () => void;
   expectedPinConfigured: boolean;
 }
 
-export function LoginPage({ onAuthenticated, expectedPinConfigured }: LoginPageProps) {
+export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -207,25 +207,10 @@ export function LoginPage({ onAuthenticated, expectedPinConfigured }: LoginPageP
           })}
         </div>
 
-        {/* FOOTNOTE / DEFAULT PIN */}
-        <div className="pt-2 border-t border-hairline text-[11px] text-ink-muted">
-          <span>Protected by </span>
-          <code className="bg-subtle px-1.5 py-0.5 rounded border border-hairline font-mono text-ink-primary">
-            APP_PIN
-          </code>
-          <span> in .env (Default: </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setPin("1234");
-              handleVerifyPin("1234");
-            }}
-            className="text-ink-primary font-mono font-bold underline hover:text-black"
-          >
-            1234
-          </button>
-          <span>)</span>
+        {/* SECURITY NOTE (No plain PIN displayed) */}
+        <div className="pt-2 border-t border-hairline text-[11px] text-ink-muted flex items-center justify-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-ink-muted" />
+          <span>Encrypted session &bull; Authorized access only</span>
         </div>
       </div>
 
@@ -236,4 +221,3 @@ export function LoginPage({ onAuthenticated, expectedPinConfigured }: LoginPageP
     </div>
   );
 }
-
