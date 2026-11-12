@@ -236,3 +236,4 @@ export function LoginPage({ onAuthenticated, expectedPinConfigured }: LoginPageP
     </div>
   );
 }
+
