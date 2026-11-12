@@ -49,6 +49,7 @@ export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isStartingPractice, setIsStartingPractice] = useState(false);
   const [isCompletingPractice, setIsCompletingPractice] = useState(false);
+  const [isUndoingPractice, setIsUndoingPractice] = useState(false);
 
   // Load dashboard data for a given date
   const loadDashboard = useCallback(async (targetDate?: string) => {
@@ -112,7 +113,6 @@ export default function DashboardPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to start practice");
 
-      // Reload dashboard state
       await loadDashboard(currentDate);
     } catch (err: any) {
       alert(err.message || "Could not start practice");
@@ -146,6 +146,26 @@ export default function DashboardPage() {
     if (!res.ok) throw new Error(json.error || "Failed to skip practice");
 
     await loadDashboard(currentDate);
+  };
+
+  // Undo Practice status & streak
+  const handleUndoPractice = async () => {
+    setIsUndoingPractice(true);
+    try {
+      const res = await fetch("/api/practice/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: currentDate }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to undo practice status");
+
+      await loadDashboard(currentDate);
+    } catch (err: any) {
+      alert(err.message || "Could not undo practice");
+    } finally {
+      setIsUndoingPractice(false);
+    }
   };
 
   // Todo actions
@@ -327,7 +347,9 @@ export default function DashboardPage() {
             onDeleteTodo={handleDeleteTodo}
             onCompletePractice={handleCompletePractice}
             onOpenSkipModal={() => setIsSkipModalOpen(true)}
+            onUndoPractice={handleUndoPractice}
             isCompleting={isCompletingPractice}
+            isUndoing={isUndoingPractice}
           />
         </div>
 
@@ -344,7 +366,9 @@ export default function DashboardPage() {
             history30Days={history30Days}
             onSelectDate={handleSelectDate}
             onStartPractice={handleStartPractice}
+            onUndoPractice={handleUndoPractice}
             isStarting={isStartingPractice}
+            isUndoing={isUndoingPractice}
           />
         </div>
       </main>
@@ -356,7 +380,7 @@ export default function DashboardPage() {
             Career Shift Tracker (v2 Roadmap Edition) &bull; Linear/Geist Editorial Architecture
           </span>
           <span className="font-mono text-[11px]">
-            IST Engine (UTC+5:30) &bull; Next.js 14 & Prisma MongoDB
+            IST Engine (UTC+5:30) &bull; 9 PM Evening Audit Cron &bull; Next.js 14
           </span>
         </div>
       </footer>

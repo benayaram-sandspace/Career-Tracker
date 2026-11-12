@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ...result,
       emailSent: emailResult.success,
-      emailSimulated: emailResult.simulated,
+      emailMode: emailResult.mode,
+      previewUrl: emailResult.previewUrl,
     });
   } catch (error: any) {
     console.error("POST /api/practice/skip error:", error);

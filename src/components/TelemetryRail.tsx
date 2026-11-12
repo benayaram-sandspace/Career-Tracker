@@ -10,6 +10,7 @@ import {
   Calendar,
   AlertTriangle,
   XCircle,
+  RotateCcw,
 } from "lucide-react";
 import { DayStatus, DailyLogType } from "@/lib/db";
 import { formatDuration, getDayNumber, formatDateDisplay } from "@/lib/dateUtils";
@@ -36,7 +37,9 @@ interface TelemetryRailProps {
   >;
   onSelectDate: (date: string) => void;
   onStartPractice: () => Promise<void>;
+  onUndoPractice: () => Promise<void>;
   isStarting: boolean;
+  isUndoing: boolean;
 }
 
 export function TelemetryRail({
@@ -50,7 +53,9 @@ export function TelemetryRail({
   history30Days,
   onSelectDate,
   onStartPractice,
+  onUndoPractice,
   isStarting,
+  isUndoing,
 }: TelemetryRailProps) {
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
@@ -155,18 +160,34 @@ export function TelemetryRail({
               <span>Practice Completed</span>
             </div>
             {todayLog.completedAt && todayLog.startedAt && (
-              <span className="font-mono text-xs text-emerald-700">
+              <div className="font-mono text-xs text-emerald-700 mb-2">
                 Duration:{" "}
                 {formatDuration(
                   new Date(todayLog.completedAt).getTime() -
                     new Date(todayLog.startedAt).getTime()
                 )}
-              </span>
+              </div>
             )}
+            <button
+              onClick={onUndoPractice}
+              disabled={isUndoing}
+              className="text-[11px] text-ink-muted hover:text-ink-primary font-medium underline flex items-center justify-center gap-1 mx-auto mt-1 transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>{isUndoing ? "Undoing..." : "Undo Completion"}</span>
+            </button>
           </div>
         ) : todayLog.status === "SKIPPED" ? (
           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-center text-xs text-amber-800 font-semibold">
-            Practice Skipped Today
+            <div>Practice Skipped Today</div>
+            <button
+              onClick={onUndoPractice}
+              disabled={isUndoing}
+              className="text-[11px] text-amber-900 hover:text-ink-primary font-medium underline flex items-center justify-center gap-1 mx-auto mt-2 transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>{isUndoing ? "Undoing..." : "Undo Skip"}</span>
+            </button>
           </div>
         ) : isTodaySessionActive ? (
           <div className="text-center py-2">
@@ -268,4 +289,3 @@ export function TelemetryRail({
     </aside>
   );
 }
-

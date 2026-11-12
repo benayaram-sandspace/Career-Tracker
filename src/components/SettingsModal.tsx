@@ -13,6 +13,9 @@ import {
   AlertCircle,
   Loader2,
   Calendar,
+  ExternalLink,
+  HelpCircle,
+  Key,
 } from "lucide-react";
 import { UserSettingsType } from "@/lib/db";
 
@@ -42,8 +45,13 @@ export function SettingsModal({
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
   const [smtpStatus, setSmtpStatus] = useState<{
     success?: boolean;
+    mode?: string;
+    previewUrl?: string;
     message?: string;
+    hint?: string;
   } | null>(null);
+
+  const [showSmtpGuide, setShowSmtpGuide] = useState(false);
 
   if (!isOpen) return null;
 
@@ -74,15 +82,16 @@ export function SettingsModal({
       if (res.ok && data.success) {
         setSmtpStatus({
           success: true,
-          message: data.message || "Test email dispatched successfully!",
+          mode: data.mode,
+          previewUrl: data.previewUrl,
+          message: data.message || "Test email processed successfully!",
+          hint: data.hint,
         });
       } else {
         setSmtpStatus({
           success: false,
-          message:
-            data.error ||
-            data.hint ||
-            "Failed to send test email. Check your SMTP credentials in .env.",
+          message: data.error || "Failed to dispatch test email.",
+          hint: data.hint,
         });
       }
     } catch (err: any) {
@@ -202,15 +211,15 @@ export function SettingsModal({
               className="w-full bg-subtle/50 border border-hairline rounded-xl p-2.5 text-xs text-ink-muted font-mono"
             />
             <span className="text-[10px] text-ink-muted mt-1 block">
-              Defaulted to Asia/Kolkata (9 AM & 9 PM IST Cron).
+              Defaulted to Asia/Kolkata (Evening Audit Cron at 9:00 PM IST).
             </span>
           </div>
 
-          {/* SMTP TEST SECTION */}
+          {/* SMTP TEST & SETUP SECTION */}
           <div className="pt-3 border-t border-hairline">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-ink-muted uppercase tracking-wider">
-                SMTP Delivery Verification
+                SMTP Email Verification
               </span>
               <button
                 type="button"
@@ -221,7 +230,7 @@ export function SettingsModal({
                 {isTestingSmtp ? (
                   <>
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Testing...</span>
+                    <span>Verifying...</span>
                   </>
                 ) : (
                   <>
@@ -234,20 +243,97 @@ export function SettingsModal({
 
             {smtpStatus && (
               <div
-                className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                className={`p-3.5 rounded-xl text-xs space-y-2 ${
                   smtpStatus.success
-                    ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                    : "bg-rose-50 border border-rose-200 text-rose-800"
+                    ? "bg-emerald-50 border border-emerald-200 text-emerald-900"
+                    : "bg-rose-50 border border-rose-200 text-rose-900"
                 }`}
               >
-                {smtpStatus.success ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                <div className="flex items-start gap-2">
+                  {smtpStatus.success ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                  )}
+                  <div>
+                    <span className="font-semibold">{smtpStatus.message}</span>
+                    {smtpStatus.hint && (
+                      <p className="mt-1 text-[11px] opacity-90">{smtpStatus.hint}</p>
+                    )}
+                  </div>
+                </div>
+
+                {smtpStatus.previewUrl && (
+                  <div className="pt-1">
+                    <a
+                      href={smtpStatus.previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Open Ethereal Email Preview &rarr;</span>
+                    </a>
+                  </div>
                 )}
-                <span>{smtpStatus.message}</span>
               </div>
             )}
+
+            {/* EXPANDABLE GMAIL SETUP INSTRUCTIONS */}
+            <div className="mt-2.5">
+              <button
+                type="button"
+                onClick={() => setShowSmtpGuide((prev) => !prev)}
+                className="text-[11px] text-ink-muted hover:text-ink-primary flex items-center gap-1 font-medium transition-colors"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>How to set up Gmail 16-character App Password?</span>
+              </button>
+
+              {showSmtpGuide && (
+                <div className="mt-2 p-3.5 rounded-xl bg-subtle text-[11px] text-ink-secondary space-y-2 border border-hairline">
+                  <div className="font-bold text-ink-primary flex items-center gap-1">
+                    <Key className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Quick Gmail SMTP Setup (2 minutes):</span>
+                  </div>
+                  <ol className="list-decimal pl-4 space-y-1.5 leading-relaxed">
+                    <li>
+                      Go to{" "}
+                      <a
+                        href="https://myaccount.google.com/security"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline text-ink-primary font-semibold"
+                      >
+                        Google Account &rarr; Security
+                      </a>{" "}
+                      and enable <strong>2-Step Verification</strong>.
+                    </li>
+                    <li>
+                      Go to{" "}
+                      <a
+                        href="https://myaccount.google.com/apppasswords"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline text-ink-primary font-semibold"
+                      >
+                        myaccount.google.com/apppasswords
+                      </a>
+                      .
+                    </li>
+                    <li>
+                      Enter <strong>Career Tracker</strong> as app name and click <strong>Create</strong>.
+                    </li>
+                    <li>
+                      Copy the <strong>16-character code</strong> (without spaces) and paste it into your local <code className="bg-white px-1 py-0.5 rounded border font-mono">.env</code>:
+                      <pre className="mt-1 p-2 rounded bg-white font-mono text-[10px] text-ink-primary border">
+                        SMTP_USER=&quot;your-gmail@gmail.com&quot;&#10;SMTP_PASS=&quot;abcd efgh ijkl mnop&quot;
+                      </pre>
+                    </li>
+                  </ol>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-hairline">

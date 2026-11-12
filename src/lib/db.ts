@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { prisma } from "./prisma";
-import { getTodayIST, getYesterdayIST, getRoadmapDates } from "./dateUtils";
+import { getTodayIST, getYesterdayIST, getRoadmapDates, addDaysToDate } from "./dateUtils";
 
 export type DayStatus = "PENDING" | "COMPLETED" | "SKIPPED" | "MISSED";
 
@@ -465,7 +465,6 @@ export async function saveRoadmapBatch(
   startDate: string,
   days: BatchDayInput[]
 ): Promise<{ success: boolean; count: number }> {
-  // 1. Update UserSettings with planStartDate
   await updateUserSettings({ planStartDate: startDate });
 
   if (isPrismaConfigured()) {
@@ -490,12 +489,10 @@ export async function saveRoadmapBatch(
           });
         }
 
-        // Delete existing uncompleted todos or replace
         await prisma.todoItem.deleteMany({
           where: { dailyLogId: log.id },
         });
 
-        // Add core goal
         if (day.coreGoal && day.coreGoal.trim()) {
           await prisma.todoItem.create({
             data: {
@@ -508,7 +505,6 @@ export async function saveRoadmapBatch(
           });
         }
 
-        // Add sub tasks
         if (day.subTasks && day.subTasks.length > 0) {
           let orderIdx = 1;
           for (const sub of day.subTasks) {
@@ -737,4 +733,69 @@ export async function missDailyPractice(
   writeLocalStore(store);
 
   return { log, userSettings: updatedSettings };
+}
+
+/**
+ * UNDO / REVERT TODAY'S STATUS & STREAK
+ * Resets status to PENDING and reverts streak calculation.
+ */
+export async function undoDailyPractice(
+  date: string
+): Promise<{ log: DailyLogType; userSettings: UserSettingsType }> {
+  const settings = await getUserSettings();
+  const log = await upsertDailyLog(date);
+  const previousStatus = log.status;
+
+  let newStreak = settings.currentStreak;
+  let newLastCompletedDate = settings.lastCompletedDate;
+
+  if (previousStatus === "COMPLETED") {
+    // If completing today had incremented the streak, revert it
+    newStreak = Math.max(0, settings.currentStreak - 1);
+    if (newStreak > 0) {
+      newLastCompletedDate = getYesterdayIST(settings.timezone);
+    } else {
+      newLastCompletedDate = null;
+    }
+  } else if (previousStatus === "SKIPPED" || previousStatus === "MISSED") {
+    // Check if yesterday was completed
+    const yesterday = getYesterdayIST(settings.timezone);
+    const yLog = await getDailyLog(yesterday);
+    if (yLog && yLog.status === "COMPLETED") {
+      newStreak = 1;
+      newLastCompletedDate = yesterday;
+    }
+  }
+
+  const updatedSettings = await updateUserSettings({
+    currentStreak: newStreak,
+    lastCompletedDate: newLastCompletedDate,
+  });
+
+  if (isPrismaConfigured()) {
+    try {
+      const updatedLog = await prisma.dailyLog.update({
+        where: { id: log.id },
+        data: {
+          status: "PENDING",
+          completedAt: null,
+          skipReason: null,
+        },
+        include: { todos: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
+      });
+      return { log: updatedLog as DailyLogType, userSettings: updatedSettings };
+    } catch (e) {
+      console.warn("Prisma undoDailyPractice error, falling back to local storage:", e);
+    }
+  }
+
+  const store = readLocalStore();
+  const targetLog = store.dailyLogs[date] || log;
+  targetLog.status = "PENDING";
+  targetLog.completedAt = null;
+  targetLog.skipReason = null;
+  store.dailyLogs[date] = targetLog;
+  writeLocalStore(store);
+
+  return { log: targetLog, userSettings: updatedSettings };
 }

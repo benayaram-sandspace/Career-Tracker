@@ -13,8 +13,9 @@ import {
   Sparkles,
   Lock,
   ArrowRight,
+  RotateCcw,
 } from "lucide-react";
-import { DailyLogType, TodoItemType } from "@/lib/db";
+import { DailyLogType } from "@/lib/db";
 import { formatFullDate } from "@/lib/dateUtils";
 import confetti from "canvas-confetti";
 
@@ -28,7 +29,9 @@ interface ExecutionCanvasProps {
   onDeleteTodo: (id: string) => Promise<void>;
   onCompletePractice: () => Promise<void>;
   onOpenSkipModal: () => void;
+  onUndoPractice: () => Promise<void>;
   isCompleting: boolean;
+  isUndoing: boolean;
 }
 
 export function ExecutionCanvas({
@@ -41,7 +44,9 @@ export function ExecutionCanvas({
   onDeleteTodo,
   onCompletePractice,
   onOpenSkipModal,
+  onUndoPractice,
   isCompleting,
+  isUndoing,
 }: ExecutionCanvasProps) {
   const [newTitle, setNewTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,7 +86,6 @@ export function ExecutionCanvas({
     await onCompletePractice();
   };
 
-  // Day Badge Text
   const getBadgeLabel = () => {
     const dayStr = dayNumber ? `DAY ${dayNumber} OF 30` : "ROADMAP DAY";
     if (isToday) return `${dayStr} • TODAY`;
@@ -123,7 +127,7 @@ export function ExecutionCanvas({
 
           {/* Audit / Past status pill */}
           {isPast && (
-            <div className="self-start sm:self-auto">
+            <div className="self-start sm:self-auto flex items-center gap-2">
               {selectedLog.status === "COMPLETED" && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <CheckCircle2 className="w-3.5 h-3.5" />
@@ -142,11 +146,23 @@ export function ExecutionCanvas({
                   Missed at 9 PM IST
                 </span>
               )}
+              {/* Allow undo even on past days if completed/skipped */}
+              {(selectedLog.status === "COMPLETED" || selectedLog.status === "SKIPPED") && (
+                <button
+                  onClick={onUndoPractice}
+                  disabled={isUndoing}
+                  title="Undo day status"
+                  className="p-1 rounded-lg border border-hairline hover:bg-subtle text-ink-muted hover:text-ink-primary transition-colors text-xs flex items-center gap-1 px-2"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Undo</span>
+                </button>
+              )}
             </div>
           )}
         </div>
 
-        {/* Skipped reason display if in past */}
+        {/* Skipped reason display if in past or today */}
         {selectedLog.status === "SKIPPED" && selectedLog.skipReason && (
           <div className="mb-6 p-4 rounded-xl bg-amber-50/60 border border-amber-200 text-xs">
             <span className="font-bold text-amber-800 uppercase tracking-wider block mb-1">
@@ -306,18 +322,38 @@ export function ExecutionCanvas({
         {isToday && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             {selectedLog.status === "COMPLETED" ? (
-              <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-xl w-full justify-center sm:justify-start">
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="text-xs font-semibold">
-                  Today&apos;s practice is locked in and verified.
-                </span>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
+                <div className="flex items-center gap-2 text-emerald-800 bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-xl flex-1 w-full sm:w-auto">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span className="text-xs font-semibold">
+                    Today&apos;s practice is locked in and streak extended.
+                  </span>
+                </div>
+                <button
+                  onClick={onUndoPractice}
+                  disabled={isUndoing}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-ink-secondary hover:text-ink-primary bg-subtle hover:bg-hairline border border-hairline transition-colors flex items-center gap-1.5 shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>{isUndoing ? "Undoing..." : "Undo Completion"}</span>
+                </button>
               </div>
             ) : selectedLog.status === "SKIPPED" ? (
-              <div className="flex items-center gap-2 text-amber-800 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl w-full justify-center sm:justify-start">
-                <AlertTriangle className="w-4 h-4" />
-                <span className="text-xs font-semibold">
-                  Intentional skip logged. Tomorrow is non-negotiable.
-                </span>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
+                <div className="flex items-center gap-2 text-amber-800 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl flex-1 w-full sm:w-auto">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span className="text-xs font-semibold">
+                    Intentional skip logged. Tomorrow is non-negotiable.
+                  </span>
+                </div>
+                <button
+                  onClick={onUndoPractice}
+                  disabled={isUndoing}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-ink-secondary hover:text-ink-primary bg-subtle hover:bg-hairline border border-hairline transition-colors flex items-center gap-1.5 shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>{isUndoing ? "Undoing..." : "Undo Skip"}</span>
+                </button>
               </div>
             ) : (
               <>
@@ -369,4 +405,3 @@ export function ExecutionCanvas({
     </div>
   );
 }
-
