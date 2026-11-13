@@ -138,7 +138,15 @@ function isPrismaConfigured(): boolean {
 
 // ----------------- Public Data Access Functions -----------------
 
+let cachedUserSettings: { data: UserSettingsType; timestamp: number } | null = null;
+const SETTINGS_CACHE_TTL = 30000; // 30 seconds in-memory cache to prevent blocking database round-trips
+
 export async function getUserSettings(): Promise<UserSettingsType> {
+  const now = Date.now();
+  if (cachedUserSettings && now - cachedUserSettings.timestamp < SETTINGS_CACHE_TTL) {
+    return cachedUserSettings.data;
+  }
+
   const today = getTodayIST("Asia/Kolkata");
   if (isPrismaConfigured()) {
     try {
@@ -156,6 +164,7 @@ export async function getUserSettings(): Promise<UserSettingsType> {
           },
         });
       }
+      cachedUserSettings = { data: settings as UserSettingsType, timestamp: now };
       return settings as UserSettingsType;
     } catch (e) {
       console.warn("Prisma error connecting to MongoDB, falling back to local storage:", e);
@@ -167,6 +176,7 @@ export async function getUserSettings(): Promise<UserSettingsType> {
     store.userSettings.planStartDate = today;
     writeLocalStore(store);
   }
+  cachedUserSettings = { data: store.userSettings, timestamp: now };
   return store.userSettings;
 }
 
@@ -180,6 +190,7 @@ export async function updateUserSettings(
         where: { id: current.id },
         data,
       });
+      cachedUserSettings = { data: updated as UserSettingsType, timestamp: Date.now() };
       return updated as UserSettingsType;
     } catch (e) {
       console.warn("Prisma update error, falling back to local storage:", e);
@@ -192,6 +203,7 @@ export async function updateUserSettings(
     ...data,
   };
   writeLocalStore(store);
+  cachedUserSettings = { data: store.userSettings, timestamp: Date.now() };
   return store.userSettings;
 }
 
@@ -492,59 +504,73 @@ export async function saveRoadmapBatch(
 
   if (isPrismaConfigured()) {
     try {
-      for (const day of days) {
-        let log = await prisma.dailyLog.findUnique({
-          where: { date: day.date },
-        });
+      const dates = days.map((d) => d.date);
 
-        if (!log) {
-          log = await prisma.dailyLog.create({
+      // 1. Fetch all existing logs for these dates in a single bulk query
+      const existingLogs = await prisma.dailyLog.findMany({
+        where: { date: { in: dates } },
+        select: { id: true, date: true },
+      });
+      const existingMap = new Map(existingLogs.map((l) => [l.date, l.id]));
+      const existingIds = existingLogs.map((l) => l.id);
+
+      // 2. Clear previous todos for existing days in a single bulk query
+      if (existingIds.length > 0) {
+        await prisma.todoItem.deleteMany({
+          where: { dailyLogId: { in: existingIds } },
+        });
+      }
+
+      // 3. Batch create or update all days with their todos in parallel
+      const operations = days.map((day) => {
+        const existingId = existingMap.get(day.date);
+
+        const todosToCreate = [
+          ...(day.coreGoal && day.coreGoal.trim()
+            ? [
+                {
+                  title: day.coreGoal.trim(),
+                  isCoreGoal: true,
+                  isCompleted: false,
+                  order: 0,
+                },
+              ]
+            : []),
+          ...(day.subTasks || [])
+            .filter((s) => s && s.trim())
+            .map((sub, idx) => ({
+              title: sub.trim(),
+              isCoreGoal: false,
+              isCompleted: false,
+              order: idx + 1,
+            })),
+        ];
+
+        if (existingId) {
+          return prisma.dailyLog.update({
+            where: { id: existingId },
+            data: {
+              dayNumber: day.dayNumber,
+              todos: {
+                create: todosToCreate,
+              },
+            },
+          });
+        } else {
+          return prisma.dailyLog.create({
             data: {
               date: day.date,
               dayNumber: day.dayNumber,
               status: "PENDING",
-            },
-          });
-        } else {
-          log = await prisma.dailyLog.update({
-            where: { id: log.id },
-            data: { dayNumber: day.dayNumber },
-          });
-        }
-
-        await prisma.todoItem.deleteMany({
-          where: { dailyLogId: log.id },
-        });
-
-        if (day.coreGoal && day.coreGoal.trim()) {
-          await prisma.todoItem.create({
-            data: {
-              dailyLogId: log.id,
-              title: day.coreGoal.trim(),
-              isCoreGoal: true,
-              isCompleted: false,
-              order: 0,
+              todos: {
+                create: todosToCreate,
+              },
             },
           });
         }
+      });
 
-        if (day.subTasks && day.subTasks.length > 0) {
-          let orderIdx = 1;
-          for (const sub of day.subTasks) {
-            if (sub && sub.trim()) {
-              await prisma.todoItem.create({
-                data: {
-                  dailyLogId: log.id,
-                  title: sub.trim(),
-                  isCoreGoal: false,
-                  isCompleted: false,
-                  order: orderIdx++,
-                },
-              });
-            }
-          }
-        }
-      }
+      await Promise.all(operations);
       return { success: true, count: days.length };
     } catch (e) {
       console.warn("Prisma saveRoadmapBatch error, falling back to local storage:", e);

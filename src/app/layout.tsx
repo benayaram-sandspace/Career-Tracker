@@ -9,7 +9,10 @@ export const metadata: Metadata = {
   description:
     "Distraction-free career shift accountability & streak tracker with automated SMTP alerts.",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
   },
 };
 

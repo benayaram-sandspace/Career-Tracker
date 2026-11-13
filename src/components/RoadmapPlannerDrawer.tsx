@@ -176,8 +176,8 @@ export function RoadmapPlannerDrawer({
         };
       });
 
-      await onSaveRoadmap(startDate, payload);
       onClose();
+      await onSaveRoadmap(startDate, payload);
     } finally {
       setIsSaving(false);
     }

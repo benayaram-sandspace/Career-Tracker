@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getUserSettings,
   upsertDailyLog,
-  getDailyLog,
   get30DaysLogs,
 } from "@/lib/db";
 import { getTodayIST, getRoadmapDates, getDayNumber } from "@/lib/dateUtils";
@@ -12,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
+    // 1. Fetch user settings (cached in-memory for 30s)
     const userSettings = await getUserSettings();
     const todayIST = getTodayIST(userSettings.timezone);
 
@@ -26,24 +26,26 @@ export async function GET(req: NextRequest) {
     const validDayNumber =
       requestedDayNumber >= 1 && requestedDayNumber <= 30 ? requestedDayNumber : undefined;
 
-    // Ensure logs exist
-    const selectedLog = await upsertDailyLog(requestedDate, validDayNumber);
-    const todayLog =
-      requestedDate === todayIST
-        ? selectedLog
-        : await upsertDailyLog(todayIST, getDayNumber(todayIST, planStart));
+    // 2. Concurrently execute selectedLog, todayLog, history30Days, and auth check
+    const isToday = requestedDate === todayIST;
 
-    const history30Days = await get30DaysLogs(roadmapDates);
+    const [selectedLog, todayLog, history30Days, authenticated] = await Promise.all([
+      upsertDailyLog(requestedDate, validDayNumber),
+      isToday
+        ? Promise.resolve(null)
+        : upsertDailyLog(todayIST, getDayNumber(todayIST, planStart)),
+      get30DaysLogs(roadmapDates),
+      isUserAuthenticated(req),
+    ]);
 
     const pinRequired = isPinProtectionEnabled();
-    const authenticated = await isUserAuthenticated(req);
 
     return NextResponse.json({
       userSettings,
       todayIST,
       selectedDate: requestedDate,
       selectedLog,
-      todayLog,
+      todayLog: todayLog || selectedLog,
       roadmapDates,
       history30Days,
       pinRequired,

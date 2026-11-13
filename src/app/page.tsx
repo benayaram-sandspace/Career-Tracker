@@ -89,6 +89,13 @@ export default function DashboardPage() {
         }
         const json: DashboardData = await res.json();
         setData(json);
+        try {
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem("career_tracker_dash_cache", JSON.stringify(json));
+          }
+        } catch {
+          // ignore session storage quota
+        }
         if (!targetDate) {
           setCurrentDate(json.todayIST);
         } else {
@@ -105,6 +112,21 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
+    // Instant paint from session cache if available
+    try {
+      if (typeof window !== "undefined") {
+        const cached = sessionStorage.getItem("career_tracker_dash_cache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setData(parsed);
+          setCurrentDate(parsed.selectedDate || parsed.todayIST);
+          setLoading(false);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     const savedPin =
       typeof window !== "undefined"
         ? localStorage.getItem("career_tracker_pin") || undefined
@@ -253,7 +275,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Save 30-Day Batch Roadmap
+  // Save 30-Day Batch Roadmap with Instant Optimistic UI
   const handleSaveRoadmap = async (
     startDate: string,
     days: Array<{
@@ -263,14 +285,81 @@ export default function DashboardPage() {
       subTasks: string[];
     }>
   ) => {
-    const res = await authFetch("/api/roadmap/batch", {
-      method: "POST",
-      body: JSON.stringify({ startDate, days }),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Failed to save roadmap batch");
+    // Optimistically update local state immediately so user experiences zero lag
+    if (data) {
+      const updatedHistory = { ...data.history30Days };
+      days.forEach((d) => {
+        const existing = updatedHistory[d.date];
+        updatedHistory[d.date] = {
+          dayNumber: d.dayNumber,
+          status: existing?.status || "PENDING",
+          skipReason: existing?.skipReason || null,
+          coreGoal: d.coreGoal,
+          totalTasks: (d.coreGoal ? 1 : 0) + (d.subTasks?.length || 0),
+          completedTasks: existing?.completedTasks || 0,
+        };
+      });
 
-    await loadDashboard(currentDate);
+      let updatedSelectedLog = data.selectedLog;
+      const matchingDay = days.find((d) => d.date === currentDate);
+      if (matchingDay) {
+        const todos = [
+          ...(matchingDay.coreGoal
+            ? [
+                {
+                  id: `opt-core-${Date.now()}`,
+                  dailyLogId: data.selectedLog.id,
+                  title: matchingDay.coreGoal,
+                  isCoreGoal: true,
+                  isCompleted: false,
+                  order: 0,
+                  createdAt: new Date(),
+                },
+              ]
+            : []),
+          ...(matchingDay.subTasks || []).map((sub, idx) => ({
+            id: `opt-sub-${Date.now()}-${idx}`,
+            dailyLogId: data.selectedLog.id,
+            title: sub,
+            isCoreGoal: false,
+            isCompleted: false,
+            order: idx + 1,
+            createdAt: new Date(),
+          })),
+        ];
+        updatedSelectedLog = {
+          ...data.selectedLog,
+          dayNumber: matchingDay.dayNumber,
+          todos,
+        };
+      }
+
+      setData({
+        ...data,
+        userSettings: {
+          ...data.userSettings,
+          planStartDate: startDate,
+        },
+        selectedLog: updatedSelectedLog,
+        history30Days: updatedHistory,
+      });
+    }
+
+    try {
+      const res = await authFetch("/api/roadmap/batch", {
+        method: "POST",
+        body: JSON.stringify({ startDate, days }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to save roadmap batch");
+
+      // Background revalidation
+      await loadDashboard(currentDate);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to save roadmap batch");
+      await loadDashboard(currentDate);
+    }
   };
 
   const handleSaveSettings = async (updated: Partial<UserSettingsType>) => {
